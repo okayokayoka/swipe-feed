@@ -95,13 +95,14 @@ export async function setSetting(key, value) {
 
 /** アプリ設定を一括取得 */
 export async function loadSettings() {
-  const [authToken, workerUrl, proxySecret, feeds] = await Promise.all([
+  const [authToken, ct0, workerUrl, proxySecret, feeds] = await Promise.all([
     getSetting('authToken'),
+    getSetting('ct0'),
     getSetting('workerUrl'),
     getSetting('proxySecret'),
     getSetting('feeds'),
   ]);
-  return { authToken, workerUrl, proxySecret, feeds };
+  return { authToken, ct0, workerUrl, proxySecret, feeds };
 }
 
 // ────────────────────────────────────────
