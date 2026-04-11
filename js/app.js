@@ -119,7 +119,7 @@ async function loadFeed(feedId) {
     updateRemainingBadge();
   } catch (err) {
     console.error('フィード読み込みエラー:', err);
-    showToast('読み込みに失敗しました');
+    showToast('読み込みエラー: ' + (err?.message ?? err), 4000);
     // キャッシュだけで続行
     const posts = await getUnreadPosts(feedId, 30);
     stack.load(posts, feedId);
