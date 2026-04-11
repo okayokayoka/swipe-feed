@@ -210,6 +210,19 @@
               デプロイ後に Cloudflare ダッシュボードで確認できる URL
             </p>
           </div>
+
+          <div class="settings-item">
+            <label class="settings-label" for="setup-proxy-secret">Proxy Secret</label>
+            <input
+              id="setup-proxy-secret"
+              class="setup-input"
+              type="password"
+              placeholder="wrangler secret put PROXY_SECRET で設定した値"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+            >
+          </div>
         </div>
 
         <button id="btn-setup-save" class="settings-btn settings-btn-primary" style="width:100%;margin-top:8px">

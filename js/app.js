@@ -441,21 +441,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // セットアップ画面の保存
   document.getElementById('btn-setup-save')?.addEventListener('click', async () => {
-    const authToken = document.getElementById('setup-auth-token').value.trim();
-    const ct0       = document.getElementById('setup-ct0').value.trim();
-    const workerUrl = document.getElementById('setup-worker-url').value.trim();
+    const authToken   = document.getElementById('setup-auth-token').value.trim();
+    const ct0         = document.getElementById('setup-ct0').value.trim();
+    const workerUrl   = document.getElementById('setup-worker-url').value.trim();
+    const proxySecret = document.getElementById('setup-proxy-secret').value.trim();
     if (!authToken || !ct0 || !workerUrl) {
       showToast('auth_token、ct0、Worker URL は必須です');
       return;
     }
     await Promise.all([
-      setSetting('authToken', authToken),
-      setSetting('ct0',       ct0),
-      setSetting('workerUrl', workerUrl),
+      setSetting('authToken',   authToken),
+      setSetting('ct0',         ct0),
+      setSetting('workerUrl',   workerUrl),
+      setSetting('proxySecret', proxySecret),
     ]);
-    settings.authToken = authToken;
-    settings.ct0       = ct0;
-    settings.workerUrl = workerUrl;
+    settings.authToken   = authToken;
+    settings.ct0         = ct0;
+    settings.workerUrl   = workerUrl;
+    settings.proxySecret = proxySecret;
     await setupMainScreen();
     showScreen('swipe');
   });
