@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<!-- このファイルをブラウザで開くと、PWA用のアイコンPNGが自動ダウンロードされます。
+     ダウンロードされた icon-192.png と icon-512.png を icons/ フォルダに置いてください。 -->
+<html>
+<head><meta charset="UTF-8"><title>アイコン生成</title></head>
+<body>
+<canvas id="c"></canvas>
+<p>このページを開くとアイコンが自動的にダウンロードされます。<br>
+   ダウンロードした2つのPNGファイルをこの <code>icons/</code> フォルダに置いてください。</p>
+<script>
+function generateIcon(size) {
+  const canvas = document.getElementById('c');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  const r = size * 0.208; // 角丸
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, r);
+  ctx.fill();
+
+  const s = size / 192;
+
+  // カード3枚（奥から）
+  function card(x, y, w, h, radius, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x * s, y * s, w * s, h * s, radius * s);
+    ctx.fill();
+  }
+  card(44, 68, 104, 76, 10, '#2c2c2e');
+  card(50, 60, 104, 76, 10, '#3a3a3c');
+  card(56, 52, 104, 76, 10, 'rgba(255,255,255,0.95)');
+
+  // ハート
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  const hx = 96 * s, hy = 94 * s;
+  ctx.moveTo(hx, hy);
+  ctx.bezierCurveTo(hx, hy, (hx - 20*s), (hy - 12*s), (hx - 20*s), (hy - 24*s));
+  ctx.bezierCurveTo((hx - 20*s), (hy - 31*s), (hx - 14*s), (hy - 36*s), (hx - 7*s), (hy - 34*s));
+  ctx.bezierCurveTo((hx - 4*s), (hy - 33*s), (hx - 1*s), (hy - 30*s), hx, (hy - 28*s));
+  ctx.bezierCurveTo(hx, (hy - 30*s), (hx + 1*s), (hy - 33*s), (hx + 4*s), (hy - 34*s));
+  ctx.bezierCurveTo((hx + 14*s), (hy - 36*s), (hx + 20*s), (hy - 31*s), (hx + 20*s), (hy - 24*s));
+  ctx.bezierCurveTo((hx + 20*s), (hy - 12*s), hx, hy, hx, hy);
+  ctx.fill();
+
+  // ダウンロード
+  const link = document.createElement('a');
+  link.download = `icon-${size}.png`;
+  link.href = canvas.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+window.onload = () => {
+  if (!HTMLCanvasElement.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r) {
+      this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);
+      this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);
+      this.arcTo(x,y,x+w,y,r);this.closePath();
+      return this;
+    };
+  }
+  generateIcon(192);
+  setTimeout(() => generateIcon(512), 500);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="40" fill="#0a0a0a"/>
+  <!-- カードスタック -->
+  <rect x="44" y="68" width="104" height="76" rx="10" fill="#2c2c2e"/>
+  <rect x="50" y="60" width="104" height="76" rx="10" fill="#3a3a3c"/>
+  <rect x="56" y="52" width="104" height="76" rx="10" fill="#ffffff" fill-opacity="0.95"/>
+  <!-- ハートアイコン -->
+  <path d="M96 94 C96 94 76 82 76 70 C76 63 82 58 89 60 C92 61 95 64 96 66 C97 64 100 61 103 60 C110 58 116 63 116 70 C116 82 96 94 96 94Z" fill="#4ade80"/>
+</svg>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SwipeFeed">
+  <title>SwipeFeed</title>
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ═══════════════════════════════════════════════════
+         スワイプ画面
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-swipe" class="screen">
+
+      <!-- フィードタブ -->
+      <div id="feed-tabs" class="feed-tabs" role="tablist" aria-label="フィードカテゴリ"></div>
+
+      <!-- カードスタック -->
+      <div class="card-stack-area">
+        <div id="card-stack"></div>
+      </div>
+
+      <!-- 残り件数 -->
+      <div id="remaining-badge" class="remaining-badge" aria-live="polite"></div>
+
+      <!-- アクションボタン -->
+      <div class="action-buttons" role="group" aria-label="スワイプアクション">
+        <button id="btn-dismiss"  class="action-btn action-btn-dismiss"  aria-label="スキップ">✕</button>
+        <button id="btn-like"     class="action-btn action-btn-like"     aria-label="いいね">♥</button>
+        <button id="btn-bookmark" class="action-btn action-btn-bookmark" aria-label="ブックマーク">★</button>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ブックマーク画面
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-bookmarks" class="screen">
+
+      <div class="bookmarks-header">
+        <h1 class="bookmarks-title">ブックマーク</h1>
+        <input
+          id="bookmark-search"
+          class="search-input"
+          type="search"
+          placeholder="検索..."
+          aria-label="ブックマーク検索"
+          inputmode="search"
+        >
+      </div>
+
+      <div id="bookmark-list" class="bookmarks-list" role="list"></div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         設定画面
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-settings" class="screen settings-screen">
+
+      <div class="settings-header">設定</div>
+
+      <!-- 認証 -->
+      <div class="settings-section">
+        <p class="settings-section-title">X 認証</p>
+
+        <div class="settings-item">
+          <label class="settings-label" for="setting-auth-token">auth_token</label>
+          <input
+            id="setting-auth-token"
+            class="settings-input"
+            type="password"
+            placeholder="Xの auth_token cookie の値"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+          >
+          <p class="settings-hint">
+            PCのChromeで x.com を開き、DevTools → Application → Cookies → auth_token の値をコピー
+          </p>
+        </div>
+      </div>
+
+      <!-- Worker -->
+      <div class="settings-section">
+        <p class="settings-section-title">Cloudflare Worker</p>
+
+        <div class="settings-item">
+          <label class="settings-label" for="setting-worker-url">Worker URL</label>
+          <input
+            id="setting-worker-url"
+            class="settings-input"
+            type="url"
+            placeholder="https://swipe-proxy.your-account.workers.dev"
+            inputmode="url"
+          >
+        </div>
+
+        <div class="settings-item">
+          <label class="settings-label" for="setting-proxy-secret">プロキシシークレット（任意）</label>
+          <input
+            id="setting-proxy-secret"
+            class="settings-input"
+            type="password"
+            placeholder="設定している場合のみ"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+
+      <!-- フィード管理 -->
+      <div class="settings-section">
+        <p class="settings-section-title">フィード</p>
+        <div id="feed-list" class="feed-list"></div>
+        <button id="btn-add-feed" class="settings-btn">+ フィードを追加</button>
+      </div>
+
+      <!-- データ -->
+      <div class="settings-section">
+        <p class="settings-section-title">データ</p>
+        <button id="btn-export" class="settings-btn">ブックマークをエクスポート (JSON)</button>
+      </div>
+
+      <!-- 保存 -->
+      <div class="settings-section">
+        <button id="btn-save-settings" class="settings-btn settings-btn-primary">保存して再起動</button>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         初期セットアップ画面（初回起動時）
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-setup" class="screen">
+      <div class="setup-screen">
+        <h1 class="setup-title">SwipeFeed へようこそ</h1>
+        <p class="setup-desc">
+          X のリストをスワイプで読む<br>パーソナルフィードリーダー
+        </p>
+
+        <div style="width:100%;display:flex;flex-direction:column;gap:12px;margin-top:8px">
+          <div class="settings-item">
+            <label class="settings-label" for="setup-auth-token">X の auth_token</label>
+            <input
+              id="setup-auth-token"
+              class="setup-input"
+              type="password"
+              placeholder="auth_token cookie の値"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+            >
+            <p class="settings-hint" style="margin-top:4px">
+              PCのChromeで x.com を開き、DevTools (F12) → Application → Cookies → x.com → auth_token の値
+            </p>
+          </div>
+
+          <div class="settings-item">
+            <label class="settings-label" for="setup-worker-url">Cloudflare Worker URL</label>
+            <input
+              id="setup-worker-url"
+              class="setup-input"
+              type="url"
+              placeholder="https://swipe-proxy.xxx.workers.dev"
+              inputmode="url"
+            >
+            <p class="settings-hint" style="margin-top:4px">
+              デプロイ後に Cloudflare ダッシュボードで確認できる URL
+            </p>
+          </div>
+        </div>
+
+        <button id="btn-setup-save" class="settings-btn settings-btn-primary" style="width:100%;margin-top:8px">
+          始める
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ボトムナビゲーション（設定画面以外で表示）
+    ═══════════════════════════════════════════════════ -->
+    <nav class="bottom-nav" role="navigation" aria-label="メインナビゲーション">
+      <button class="nav-btn active" data-screen="swipe" aria-label="スワイプ">
+        <span class="nav-icon" aria-hidden="true">🃏</span>
+        <span>スワイプ</span>
+      </button>
+      <button class="nav-btn" data-screen="bookmarks" aria-label="ブックマーク">
+        <span class="nav-icon" aria-hidden="true">★</span>
+        <span>保存済み</span>
+      </button>
+      <button class="nav-btn" data-screen="settings" aria-label="設定">
+        <span class="nav-icon" aria-hidden="true">⚙</span>
+        <span>設定</span>
+      </button>
+    </nav>
+
+    <!-- ローディングオーバーレイ -->
+    <div id="loading-overlay" class="loading-overlay hidden" aria-hidden="true">
+      <div class="spinner"></div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
