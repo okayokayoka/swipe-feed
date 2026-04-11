@@ -56,7 +56,7 @@ async function init() {
   }
 
   // auth_token 未設定ならセットアップ画面を表示
-  if (!settings.authToken || !settings.workerUrl) {
+  if (!settings.authToken || !settings.ct0 || !settings.workerUrl) {
     showScreen('setup');
     return;
   }
@@ -135,6 +135,7 @@ async function fetchAndCache(feedId) {
   const { tweets } = await fetchListTimeline({
     listId: feed.listId,
     authToken: settings.authToken,
+    ct0: settings.ct0,
     workerUrl: settings.workerUrl,
     proxySecret: settings.proxySecret,
     count: 40,
@@ -290,6 +291,7 @@ function escHtml(str) {
 // ────────────────────────────────────────────────────────────────
 function renderSettings() {
   document.getElementById('setting-auth-token').value = settings.authToken ?? '';
+  document.getElementById('setting-ct0').value = settings.ct0 ?? '';
   document.getElementById('setting-worker-url').value = settings.workerUrl ?? '';
   document.getElementById('setting-proxy-secret').value = settings.proxySecret ?? '';
 
@@ -316,22 +318,24 @@ function renderFeedList() {
 
 async function saveSettings() {
   const authToken   = document.getElementById('setting-auth-token').value.trim();
+  const ct0         = document.getElementById('setting-ct0').value.trim();
   const workerUrl   = document.getElementById('setting-worker-url').value.trim();
   const proxySecret = document.getElementById('setting-proxy-secret').value.trim();
 
-  if (!authToken || !workerUrl) {
-    showToast('auth_token と Worker URL は必須です');
+  if (!authToken || !ct0 || !workerUrl) {
+    showToast('auth_token、ct0、Worker URL は必須です');
     return;
   }
 
   await Promise.all([
     setSetting('authToken',   authToken),
+    setSetting('ct0',         ct0),
     setSetting('workerUrl',   workerUrl),
     setSetting('proxySecret', proxySecret),
     setSetting('feeds',       JSON.stringify(feeds)),
   ]);
 
-  settings = { authToken, workerUrl, proxySecret, feeds: JSON.stringify(feeds) };
+  settings = { authToken, ct0, workerUrl, proxySecret, feeds: JSON.stringify(feeds) };
   showToast('保存しました');
 
   // 再初期化
@@ -438,16 +442,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // セットアップ画面の保存
   document.getElementById('btn-setup-save')?.addEventListener('click', async () => {
     const authToken = document.getElementById('setup-auth-token').value.trim();
+    const ct0       = document.getElementById('setup-ct0').value.trim();
     const workerUrl = document.getElementById('setup-worker-url').value.trim();
-    if (!authToken || !workerUrl) {
-      showToast('両方入力してください');
+    if (!authToken || !ct0 || !workerUrl) {
+      showToast('auth_token、ct0、Worker URL は必須です');
       return;
     }
     await Promise.all([
       setSetting('authToken', authToken),
+      setSetting('ct0',       ct0),
       setSetting('workerUrl', workerUrl),
     ]);
     settings.authToken = authToken;
+    settings.ct0       = ct0;
     settings.workerUrl = workerUrl;
     await setupMainScreen();
     showScreen('swipe');

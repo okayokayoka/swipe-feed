@@ -36,18 +36,6 @@ const FEATURES = {
   responsive_web_enhance_cards_enabled: false,
 };
 
-/**
- * auth_token から ct0（CSRFトークン）を生成する。
- * X は ct0 として 32桁の16進文字列を使う。
- * 既に ct0 cookie がある場合はそれを使うべきだが、
- * ブラウザ外なので auth_token をハッシュして生成する簡易実装を使う。
- */
-async function deriveCt0(authToken) {
-  const msgBuffer = new TextEncoder().encode(authToken + 'csrf');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 /**
  * CORS プロキシ経由で X API を呼び出す。
@@ -84,8 +72,7 @@ async function callViaProxy(url, headers, workerUrl, proxySecret) {
  * @param {number} [params.count=40] - 取得件数
  * @returns {{ tweets: Tweet[], nextCursor: string|null }}
  */
-export async function fetchListTimeline({ listId, authToken, workerUrl, proxySecret, cursor, count = 40 }) {
-  const ct0 = await deriveCt0(authToken);
+export async function fetchListTimeline({ listId, authToken, ct0, workerUrl, proxySecret, cursor, count = 40 }) {
 
   const variables = {
     listId,

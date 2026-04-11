@@ -89,6 +89,22 @@
             PCのChromeで x.com を開き、DevTools → Application → Cookies → auth_token の値をコピー
           </p>
         </div>
+
+        <div class="settings-item">
+          <label class="settings-label" for="setting-ct0">ct0</label>
+          <input
+            id="setting-ct0"
+            class="settings-input"
+            type="password"
+            placeholder="Xの ct0 cookie の値"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+          >
+          <p class="settings-hint">
+            同じCookiesページで ct0 の値もコピー（auth_token の下にあります）
+          </p>
+        </div>
       </div>
 
       <!-- Worker -->
@@ -162,6 +178,22 @@
             >
             <p class="settings-hint" style="margin-top:4px">
               PCのChromeで x.com を開き、DevTools (F12) → Application → Cookies → x.com → auth_token の値
+            </p>
+          </div>
+
+          <div class="settings-item">
+            <label class="settings-label" for="setup-ct0">ct0（CSRFトークン）</label>
+            <input
+              id="setup-ct0"
+              class="setup-input"
+              type="password"
+              placeholder="ct0 cookie の値"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+            >
+            <p class="settings-hint" style="margin-top:4px">
+              同じCookiesページで ct0 の値もコピー（auth_token の近くにあります）
             </p>
           </div>
 
