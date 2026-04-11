@@ -138,7 +138,9 @@ function extractTweets(response) {
       }
 
       // ツイートエントリ以外はスキップ
-      if (entry.content.entryType !== 'TimelineTweet') continue;
+      // entryType は TimelineTimelineItem、ツイート判定は itemContent.__typename
+      if (entry.content.entryType !== 'TimelineTimelineItem') continue;
+      if (entry.content.itemContent?.__typename !== 'TimelineTweet') continue;
 
       const result = entry.content?.itemContent?.tweet_results?.result;
       if (!result || result.__typename !== 'Tweet') continue;
