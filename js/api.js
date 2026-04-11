@@ -112,12 +112,18 @@ function extractTweets(response) {
   const tweets = [];
   let nextCursor = null;
 
+  // X API エラーレスポンスを検出
+  if (response.errors?.length > 0) {
+    throw new Error(`X API: ${response.errors[0].message}`);
+  }
+
   let instructions;
   try {
     instructions = response.data.list.tweets_timeline.timeline.instructions;
   } catch {
-    console.error('Unexpected response structure:', JSON.stringify(response).slice(0, 500));
-    return { tweets, nextCursor };
+    const preview = JSON.stringify(response).slice(0, 300);
+    console.error('Unexpected response structure:', preview);
+    throw new Error('X API応答が不正: ' + preview);
   }
 
   for (const instruction of instructions) {
