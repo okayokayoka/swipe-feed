@@ -267,6 +267,42 @@ export class CardStack {
     setTimeout(() => this._applyStackStyles(), 10);
   }
 
+  /** 長押しコンテキストメニューを表示 */
+  _showCardMenu(wrapper) {
+    // 既存メニューを閉じる
+    document.querySelector('.card-context-menu')?.remove();
+
+    const tweetId = wrapper.querySelector('.card')?.dataset.tweetId;
+    const tweet = this._tweets.find(t => t.id === tweetId);
+    if (!tweet) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'card-context-menu';
+    menu.innerHTML = `
+      <ul>
+        <li data-action="open-tweet">元のツイートを開く ↗</li>
+      </ul>`;
+
+    wrapper.appendChild(menu);
+    requestAnimationFrame(() => menu.classList.add('visible'));
+
+    // メニュー外タップで閉じる
+    const close = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.classList.remove('visible');
+        setTimeout(() => menu.remove(), 150);
+        document.removeEventListener('pointerdown', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('pointerdown', close), 0);
+
+    menu.querySelector('[data-action="open-tweet"]').addEventListener('click', () => {
+      window.open(tweet.link, '_blank', 'noopener');
+      menu.classList.remove('visible');
+      setTimeout(() => menu.remove(), 150);
+    });
+  }
+
   _showEmpty() {
     this.el.innerHTML = `
       <div class="card-empty">
@@ -300,12 +336,23 @@ export class CardStack {
     this._startY = e.clientY;
     this._curX = 0;
     this._curY = 0;
+    this._longPressActive = false;
 
     const wrapper = e.currentTarget;
     wrapper.setPointerCapture(e.pointerId);
     // ドラッグ中はtransitionを無効化してカクつきを防ぐ
     wrapper.style.transition = 'none';
     wrapper.style.willChange = 'transform';
+
+    // 長押し検出（500ms）
+    this._longPressTimer = setTimeout(() => {
+      if (!this._dragging) return;
+      this._longPressActive = true;
+      this._dragging = false;
+      this._returnCard(wrapper);
+      navigator.vibrate?.(30);
+      this._showCardMenu(wrapper);
+    }, 500);
   }
 
   _onPointerMove(e) {
@@ -313,6 +360,12 @@ export class CardStack {
 
     this._curX = e.clientX - this._startX;
     this._curY = e.clientY - this._startY;
+
+    // 10px以上動いたら長押しキャンセル
+    if (this._longPressTimer && (Math.abs(this._curX) > 10 || Math.abs(this._curY) > 10)) {
+      clearTimeout(this._longPressTimer);
+      this._longPressTimer = null;
+    }
 
     const dx = this._curX;
     const dy = this._curY;
@@ -351,7 +404,9 @@ export class CardStack {
   }
 
   _onPointerUp(e) {
-    if (!this._dragging) return;
+    clearTimeout(this._longPressTimer);
+    this._longPressTimer = null;
+    if (!this._dragging) return; // 長押し発動済みならスワイプしない
     this._dragging = false;
 
     const dx = this._curX;
@@ -370,6 +425,8 @@ export class CardStack {
   }
 
   _onPointerCancel(e) {
+    clearTimeout(this._longPressTimer);
+    this._longPressTimer = null;
     if (!this._dragging) return;
     this._dragging = false;
     this._returnCard(e.currentTarget);

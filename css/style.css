@@ -374,6 +374,50 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .card-overlay.save span { color: var(--color-bookmark); }
 
 /* ────────────────────────────────────────────────────────────────
+   コンテキストメニュー（長押し）
+   ──────────────────────────────────────────────────────────────── */
+.card-context-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: rgba(28, 28, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 6px 0;
+  min-width: 230px;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.card-context-menu.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.card-context-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.card-context-menu li {
+  padding: 15px 20px;
+  font-size: 15px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.1s;
+  user-select: none;
+}
+.card-context-menu li:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.card-context-menu li:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ────────────────────────────────────────────────────────────────
    空状態
    ──────────────────────────────────────────────────────────────── */
 .card-empty {
