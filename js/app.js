@@ -235,8 +235,11 @@ async function renderBookmarks(query = '') {
     el.className = 'bookmark-item';
     el.dataset.tweetId = item.tweetId;
 
-    const thumbHTML = item.images?.[0]
-      ? `<img class="bookmark-thumb" src="${escHtml(item.images[0])}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'bookmark-thumb-placeholder\\'>📌</div>'">`
+    // 新形式(media)と旧形式(images)の両方をサポート
+    const firstMedia = item.media?.[0];
+    const thumbUrl = firstMedia?.poster || firstMedia?.url || item.images?.[0];
+    const thumbHTML = thumbUrl
+      ? `<img class="bookmark-thumb" src="${escHtml(thumbUrl)}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'bookmark-thumb-placeholder\\'>📌</div>'">`
       : `<div class="bookmark-thumb-placeholder">📌</div>`;
 
     const relTime = relativeTime(item.bookmarkedAt);

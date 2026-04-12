@@ -104,6 +104,18 @@ export async function fetchListTimeline({ listId, authToken, ct0, workerUrl, pro
 }
 
 /**
+ * video_info.variants から適切な MP4 variant を選ぶ。
+ * bitrate 降順で並べ2番目（2番目に高品質）を採用。
+ * 最高品質をスキップする理由は帯域節約（react-tweet と同じ戦略）。
+ */
+function pickMp4Variant(variants = []) {
+  const mp4s = variants
+    .filter(v => v.content_type === 'video/mp4')
+    .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
+  return mp4s.length > 1 ? mp4s[1] : mp4s[0];
+}
+
+/**
  * GraphQL レスポンスからツイートを抽出する。
  * @param {object} response - X GraphQL API レスポンス
  * @returns {{ tweets: Tweet[], nextCursor: string|null }}
@@ -153,11 +165,26 @@ function extractTweets(response) {
       const text = legacy.full_text || '';
       if (text.startsWith('@') && !text.startsWith('RT @')) continue;
 
-      // 画像を抽出（photoタイプのみ）
-      const rawMedia = legacy.entities?.media || legacy.extended_entities?.media || [];
-      const images = rawMedia
-        .filter(m => m.type === 'photo')
-        .map(m => m.media_url_https || m.media_url)
+      // メディアを抽出（photo / video / animated_gif）
+      const rawMedia = legacy.extended_entities?.media || legacy.entities?.media || [];
+      const media = rawMedia
+        .map(m => {
+          const poster = m.media_url_https || m.media_url;
+          if (m.type === 'photo') {
+            return { type: 'photo', url: poster };
+          }
+          if (m.type === 'video' || m.type === 'animated_gif') {
+            const variant = pickMp4Variant(m.video_info?.variants);
+            if (!variant) return null;
+            return {
+              type: m.type,
+              url: variant.url,
+              poster,
+              aspectRatio: m.video_info?.aspect_ratio ?? null,
+            };
+          }
+          return null;
+        })
         .filter(Boolean)
         .slice(0, 4);
 
@@ -190,7 +217,7 @@ function extractTweets(response) {
         retweetCount: legacy.retweet_count || 0,
         replyCount: legacy.reply_count || 0,
         link: `https://x.com/${userLegacy.screen_name}/status/${result.rest_id}`,
-        images,
+        media,
         quotedTweet,
       });
     }

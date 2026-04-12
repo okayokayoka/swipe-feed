@@ -49,6 +49,25 @@ function relativeTime(createdAt) {
 }
 
 // ──────────────────────────────────────────────────────────────
+// メディアアイテム単体のHTML生成
+// ──────────────────────────────────────────────────────────────
+function buildMediaItemHTML(m) {
+  if (m.type === 'photo') {
+    return `<img src="${escHtml(m.url)}" alt="ツイート画像" loading="lazy" onerror="this.style.display='none'">`;
+  }
+  // video / animated_gif: 初期はポスター画像+再生ボタン、タップで<video>に置換
+  const badge = m.type === 'animated_gif' ? '<span class="card-media-badge">GIF</span>' : '';
+  return `
+    <div class="card-media-video" data-video-url="${escHtml(m.url)}" data-video-poster="${escHtml(m.poster)}">
+      <img class="card-video-poster" src="${escHtml(m.poster)}" alt="動画サムネイル" loading="lazy" onerror="this.style.display='none'">
+      <button class="card-video-play" aria-label="動画を再生" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12L4 2v20l17-10z"/></svg>
+      </button>
+      ${badge}
+    </div>`;
+}
+
+// ──────────────────────────────────────────────────────────────
 // カードのHTML生成
 // ──────────────────────────────────────────────────────────────
 function buildCardHTML(tweet, feedId, affinityCount = 0) {
@@ -57,24 +76,23 @@ function buildCardHTML(tweet, feedId, affinityCount = 0) {
   const avatar = tweet.author?.avatar ?? '';
   const time   = relativeTime(tweet.createdAt);
   const accentColor = FEED_COLORS[feedId] ?? FEED_COLORS.default;
-  const hasImages = tweet.images?.length > 0;
+
+  // メディア配列を取得（旧形式 images との互換シム）
+  const media = tweet.media
+    || (tweet.images?.length ? tweet.images.map(url => ({ type: 'photo', url })) : []);
+  const hasMedia = media.length > 0;
 
   // 著者アフィニティインジケーター（liked 回数に応じて♥を表示）
   const hearts = affinityCount >= 3 ? '♥♥♥' : affinityCount === 2 ? '♥♥' : affinityCount === 1 ? '♥' : '';
 
-  // 画像エリア
-  let imagesHTML = '';
-  if (hasImages) {
-    if (tweet.images.length === 1) {
-      imagesHTML = `
-        <div class="card-image-single">
-          <img src="${escHtml(tweet.images[0])}" alt="ツイート画像" loading="lazy" onerror="this.parentElement.style.display='none'">
-        </div>`;
+  // メディアエリア
+  let mediaHTML = '';
+  if (hasMedia) {
+    if (media.length === 1) {
+      mediaHTML = `<div class="card-image-single">${buildMediaItemHTML(media[0])}</div>`;
     } else {
-      const imgs = tweet.images.map(url =>
-        `<img src="${escHtml(url)}" alt="ツイート画像" loading="lazy" onerror="this.parentElement.style.display='none'">`
-      ).join('');
-      imagesHTML = `<div class="card-image-scroll">${imgs}</div>`;
+      const items = media.map(m => buildMediaItemHTML(m)).join('');
+      mediaHTML = `<div class="card-image-scroll">${items}</div>`;
     }
   }
 
@@ -110,11 +128,11 @@ function buildCardHTML(tweet, feedId, affinityCount = 0) {
         ${hearts ? `<span class="card-hearts" aria-label="${affinityCount}回いいねした著者">${hearts}</span>` : ''}
       </div>
 
-      <!-- 画像 -->
-      ${imagesHTML}
+      <!-- メディア（画像 / 動画 / GIF） -->
+      ${mediaHTML}
 
       <!-- 本文 -->
-      <div class="card-body ${!hasImages ? 'card-body-full' : ''}">
+      <div class="card-body ${!hasMedia ? 'card-body-full' : ''}">
         ${displayText ? `<p class="card-text">${escHtml(displayText)}</p>` : ''}
         ${quoteHTML}
       </div>
@@ -326,11 +344,41 @@ export class CardStack {
     topWrapper.addEventListener('pointermove', this._onPointerMove.bind(this));
     topWrapper.addEventListener('pointerup',   this._onPointerUp.bind(this));
     topWrapper.addEventListener('pointercancel', this._onPointerCancel.bind(this));
+
+    // 動画再生ボタン
+    topWrapper.querySelectorAll('.card-video-play').forEach(btn => {
+      btn.addEventListener('click', this._onVideoPlayClick.bind(this));
+    });
+  }
+
+  _onVideoPlayClick(e) {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const container = btn.closest('.card-media-video');
+    if (!container) return;
+    const url = container.dataset.videoUrl;
+    const poster = container.dataset.videoPoster;
+
+    container.querySelector('.card-video-poster')?.remove();
+    btn.remove();
+
+    const video = document.createElement('video');
+    video.src = url;
+    video.poster = poster;
+    video.playsInline = true;
+    video.controls = true;
+    video.autoplay = true;
+    video.className = 'card-video-el';
+    container.appendChild(video);
+
+    video.play().catch(err => console.warn('video play failed', err));
   }
 
   _onPointerDown(e) {
-    // リンクのクリックは無視
+    // リンク・動画再生ボタンのクリックは無視
     if (e.target.closest('a')) return;
+    if (e.target.closest('.card-video-play')) return;
+    if (e.target.closest('.card-video-el')) return;
     this._dragging = true;
     this._startX = e.clientX;
     this._startY = e.clientY;

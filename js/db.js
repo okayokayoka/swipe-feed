@@ -172,7 +172,7 @@ export async function addBookmark(tweet, feedId) {
     feedId,
     author: tweet.author,
     text: tweet.text,
-    images: tweet.images,
+    media: tweet.media,
     quotedTweet: tweet.quotedTweet,
     link: tweet.link,
     createdAt: tweet.createdAt,

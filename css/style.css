@@ -257,6 +257,79 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border-radius: 4px;
 }
 
+/* ── 動画 / animated_gif ── */
+.card-media-video {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+.card-image-scroll .card-media-video {
+  width: auto;
+  height: 200px;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+.card-video-poster,
+.card-video-el {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.card-image-scroll .card-video-poster,
+.card-image-scroll .card-video-el {
+  width: auto;
+  height: 200px;
+}
+
+.card-video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 2;
+  transition: transform 0.15s ease;
+  padding: 0;
+}
+.card-video-play:active {
+  transform: translate(-50%, -50%) scale(0.92);
+}
+.card-video-play svg {
+  width: 28px;
+  height: 28px;
+  fill: currentColor;
+  margin-left: 3px;
+}
+
+.card-media-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* ── 本文エリア ── */
 .card-body {
   flex: 1;
