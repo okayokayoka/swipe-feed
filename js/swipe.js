@@ -258,16 +258,13 @@ export class CardStack {
   /** 下のカードをせり上がらせる（トップカード飛ばし後） */
   _promoteStack() {
     const wrappers = Array.from(this.el.querySelectorAll('.card-wrapper'));
-    // 手前のカード（stackIndex=2）は既に飛んでいる → 残りを1段階前に
+    const transition = 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.25s ease';
+    // 残りカードを全て1段階手前に昇格（index+1）
     wrappers.forEach(w => {
-      const idx = parseInt(w.dataset.stackIndex);
-      if (idx > 0) {
-        w.dataset.stackIndex = String(idx - 1);
-        const transition = 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.25s ease';
-        w.style.transition = transition;
-        setTimeout(() => this._applyStackStyles(), 10);
-      }
+      w.dataset.stackIndex = String(parseInt(w.dataset.stackIndex) + 1);
+      w.style.transition = transition;
     });
+    setTimeout(() => this._applyStackStyles(), 10);
   }
 
   _showEmpty() {
@@ -426,6 +423,10 @@ export class CardStack {
       if (wrappers.length < 3 && this._tweets.length > wrappers.length) {
         this._addCardToBack();
       }
+
+      // 新しいトップカードにジェスチャーをバインド
+      setTimeout(() => this._bindTopCard(), 60);
+
       if (this._tweets.length === 0) {
         setTimeout(() => this._showEmpty(), 50);
       }
@@ -453,9 +454,6 @@ export class CardStack {
     wrapper.style.zIndex = '1';
 
     this.el.prepend(wrapper); // 一番下に追加
-
-    // 追加後すぐに次のトップカードにジェスチャーをバインド
-    setTimeout(() => this._bindTopCard(), 50);
   }
 
   // ────────────────────────────────
