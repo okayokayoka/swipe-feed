@@ -212,8 +212,8 @@ export class CardStack {
       this._showEmpty();
       return;
     }
-    // 先頭から最大3枚をDOMに追加（逆順でZが奥→手前）
-    const visible = this._tweets.slice(0, 3).reverse();
+    // 先頭から最大3枚をDOMに追加（tweets[0]が手前=stackIndex 2）
+    const visible = this._tweets.slice(0, 3);
     visible.forEach((tweet, i) => {
       const wrapper = document.createElement('div');
       wrapper.className = 'card-wrapper';
