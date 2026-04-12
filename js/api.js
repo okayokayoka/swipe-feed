@@ -100,7 +100,21 @@ export async function fetchListTimeline({ listId, authToken, ct0, workerUrl, pro
   };
 
   const data = await callViaProxy(url, headers, workerUrl, proxySecret);
-  return extractTweets(data);
+  const result = extractTweets(data);
+
+  // 動画URLは video.twimg.com が外部アクセスに403を返すため Worker 経由に書き換え
+  for (const t of result.tweets) {
+    if (!t.media) continue;
+    for (const m of t.media) {
+      if (m.type === 'video' || m.type === 'animated_gif') {
+        const params = new URLSearchParams({ url: m.url });
+        if (proxySecret) params.set('secret', proxySecret);
+        m.url = `${workerUrl}/media?${params.toString()}`;
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

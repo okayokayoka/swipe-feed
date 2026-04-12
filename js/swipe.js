@@ -369,6 +369,14 @@ export class CardStack {
     video.controls = true;
     video.autoplay = true;
     video.className = 'card-video-el';
+    video.addEventListener('error', () => {
+      const err = video.error;
+      console.error('video load error', {
+        src: url,
+        code: err?.code,
+        message: err?.message,
+      });
+    });
     container.appendChild(video);
 
     video.play().catch(err => console.warn('video play failed', err));
