@@ -267,11 +267,11 @@ export class CardStack {
       } else if (idx === 1) {
         w.style.transform = 'translate3d(0, 12px, 0) scale(0.96)';
         w.style.zIndex = '2';
-        w.style.opacity = '0.9';
+        w.style.opacity = '1';
       } else {
         w.style.transform = 'translate3d(0, 24px, 0) scale(0.92)';
         w.style.zIndex = '1';
-        w.style.opacity = '0.75';
+        w.style.opacity = '1';
       }
     });
   }
@@ -566,7 +566,7 @@ export class CardStack {
     const affinity = this.callbacks.getAffinity?.(nextTweet.author?.handle) ?? 0;
     wrapper.innerHTML = buildCardHTML(nextTweet, this._feedId, affinity);
     wrapper.style.transform = 'translate3d(0, 24px, 0) scale(0.92)';
-    wrapper.style.opacity = '0.75';
+    wrapper.style.opacity = '1';
     wrapper.style.zIndex = '1';
 
     this.el.prepend(wrapper); // 一番下に追加

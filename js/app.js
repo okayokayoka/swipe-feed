@@ -16,7 +16,7 @@ import {
   savePosts, getUnreadPosts,
   recordSwipe, incrementAuthorLike,
   addBookmark, removeBookmark, getBookmarks, getBookmarkCount,
-  getAuthorsMap, exportBookmarks,
+  getAuthorsMap, exportBookmarks, clearPostsAndSwipes,
 } from './db.js';
 import { CardStack, triggerSwipeAction } from './swipe.js';
 
@@ -449,6 +449,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-export')?.addEventListener('click', async () => {
     await exportBookmarks();
     showToast('JSONをダウンロードしました');
+  });
+
+  // デバッグ: カードをすべてクリア
+  document.getElementById('btn-clear-posts')?.addEventListener('click', async () => {
+    if (!confirm('posts と swipes をすべて削除します。ブックマークは残ります。よろしいですか？')) return;
+    await clearPostsAndSwipes();
+    showToast('クリアしました。フィードを再取得します…');
+    await setupMainScreen();
+    showScreen('swipe');
   });
 
   // フィード追加
