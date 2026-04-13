@@ -179,8 +179,29 @@ function extractTweets(response) {
       const text = legacy.full_text || '';
       if (text.startsWith('@') && !text.startsWith('RT @')) continue;
 
-      // メディアを抽出（photo / video / animated_gif）
-      const rawMedia = legacy.extended_entities?.media || legacy.entities?.media || [];
+      const isRetweet = text.startsWith('RT @');
+
+      // RTの場合: 元ツイートの result / userLegacy / legacy に差し替える
+      // retweeted_status_result に元ツイートのフルデータが入っている
+      let srcResult    = result;
+      let srcUserLeg   = userLegacy;
+      let srcLegacy    = legacy;
+      let retweetedBy  = null;
+
+      if (isRetweet) {
+        const rtResult = result.retweeted_status_result?.result;
+        const rtUser   = rtResult?.core?.user_results?.result?.legacy;
+        const rtLegacy = rtResult?.legacy;
+        if (rtResult && rtUser && rtLegacy) {
+          retweetedBy = userLegacy.screen_name; // RTしたユーザー名を保持
+          srcResult   = rtResult;
+          srcUserLeg  = rtUser;
+          srcLegacy   = rtLegacy;
+        }
+      }
+
+      // メディアを抽出（元ツイートの extended_entities を使う）
+      const rawMedia = srcLegacy.extended_entities?.media || srcLegacy.entities?.media || [];
       const media = rawMedia
         .map(m => {
           const poster = m.media_url_https || m.media_url;
@@ -203,7 +224,7 @@ function extractTweets(response) {
         .slice(0, 4);
 
       // 引用ツイートを抽出
-      const quotedResult = result.quoted_status_result?.result;
+      const quotedResult = srcResult.quoted_status_result?.result;
       let quotedTweet = null;
       if (quotedResult?.legacy) {
         quotedTweet = {
@@ -212,25 +233,23 @@ function extractTweets(response) {
         };
       }
 
-      // RT本文から「RT @handle: 」プレフィックスを除去して元ツイートのテキストを取得
-      const displayText = text.replace(/^RT @\w+: /, '');
-
       tweets.push({
-        id: result.rest_id,
-        text: displayText,
+        id: result.rest_id,           // IDはRT自体（既読管理に使用）
+        text: srcLegacy.full_text || '',
         rawText: text,
-        isRetweet: text.startsWith('RT @'),
+        isRetweet,
+        retweetedBy,                  // RTしたユーザー（カード表示用）
         author: {
-          handle: userLegacy.screen_name,
-          name: userLegacy.name,
-          avatar: userLegacy.profile_image_url_https,
+          handle: srcUserLeg.screen_name,
+          name: srcUserLeg.name,
+          avatar: srcUserLeg.profile_image_url_https,
         },
-        createdAt: legacy.created_at,
-        createdAtMs: new Date(legacy.created_at).getTime(),
-        favoriteCount: legacy.favorite_count || 0,
-        retweetCount: legacy.retweet_count || 0,
-        replyCount: legacy.reply_count || 0,
-        link: `https://x.com/${userLegacy.screen_name}/status/${result.rest_id}`,
+        createdAt: srcLegacy.created_at,
+        createdAtMs: new Date(srcLegacy.created_at).getTime(),
+        favoriteCount: srcLegacy.favorite_count || 0,
+        retweetCount: srcLegacy.retweet_count || 0,
+        replyCount: srcLegacy.reply_count || 0,
+        link: `https://x.com/${srcUserLeg.screen_name}/status/${srcResult.rest_id}`,
         media,
         quotedTweet,
       });

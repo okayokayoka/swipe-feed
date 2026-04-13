@@ -116,6 +116,9 @@ function buildCardHTML(tweet, feedId, affinityCount = 0) {
       <div class="card-overlay skip"  aria-hidden="true"><span>✕</span></div>
       <div class="card-overlay save"  aria-hidden="true"><span>★</span></div>
 
+      <!-- リポストインジケーター -->
+      ${tweet.retweetedBy ? `<div class="card-retweet-bar">↺ <span>@${escHtml(tweet.retweetedBy)}</span> がリポスト</div>` : ''}
+
       <!-- ヘッダー：著者情報 -->
       <div class="card-header">
         <div class="card-author">
