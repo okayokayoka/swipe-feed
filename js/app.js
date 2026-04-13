@@ -102,6 +102,26 @@ function buildStack() {
 // ────────────────────────────────────────────────────────────────
 // フィード読み込み
 // ────────────────────────────────────────────────────────────────
+// 動画URLをWorkerプロキシ経由に書き換える（キャッシュ済み直接URLの救済含む）
+// ────────────────────────────────────────────────────────────────
+function rewriteVideoUrls(posts) {
+  const { workerUrl, proxySecret } = settings;
+  if (!workerUrl) return posts;
+  return posts.map(post => {
+    if (!post.media?.length) return post;
+    const newMedia = post.media.map(m => {
+      if ((m.type === 'video' || m.type === 'animated_gif') &&
+          m.url && !m.url.startsWith(workerUrl)) {
+        const params = new URLSearchParams({ url: m.url });
+        if (proxySecret) params.set('secret', proxySecret);
+        return { ...m, url: `${workerUrl}/media?${params.toString()}` };
+      }
+      return m;
+    });
+    return { ...post, media: newMedia };
+  });
+}
+
 async function loadFeed(feedId) {
   showLoading(true);
 
@@ -115,14 +135,14 @@ async function loadFeed(feedId) {
     }
 
     authorsMap = await getAuthorsMap();
-    stack.load(posts, feedId);
+    stack.load(rewriteVideoUrls(posts), feedId);
     updateRemainingBadge();
   } catch (err) {
     console.error('フィード読み込みエラー:', err);
     showToast('読み込みエラー: ' + (err?.message ?? err), 4000);
     // キャッシュだけで続行
     const posts = await getUnreadPosts(feedId, 30);
-    stack.load(posts, feedId);
+    stack.load(rewriteVideoUrls(posts), feedId);
   } finally {
     showLoading(false);
   }
@@ -199,7 +219,7 @@ async function handleEmpty() {
     const posts = await fetchAndCache(currentFeedId);
     if (posts && posts.length > 0) {
       authorsMap = await getAuthorsMap();
-      stack.load(posts, currentFeedId);
+      stack.load(rewriteVideoUrls(posts), currentFeedId);
     }
   } catch (err) {
     console.error('追加読み込みエラー:', err);
