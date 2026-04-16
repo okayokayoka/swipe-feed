@@ -168,7 +168,10 @@ function extractTweets(response) {
       if (entry.content.entryType !== 'TimelineTimelineItem') continue;
       if (entry.content.itemContent?.__typename !== 'TimelineTweet') continue;
 
-      const result = entry.content?.itemContent?.tweet_results?.result;
+      let result = entry.content?.itemContent?.tweet_results?.result;
+      if (!result) continue;
+      // TweetWithVisibilityResults ラッパーに対応
+      if (result.__typename === 'TweetWithVisibilityResults') result = result.tweet;
       if (!result || result.__typename !== 'Tweet') continue;
 
       const userLegacy = result.core?.user_results?.result?.legacy;
@@ -189,7 +192,9 @@ function extractTweets(response) {
       let retweetedBy  = null;
 
       if (isRetweet) {
-        const rtResult = result.retweeted_status_result?.result;
+        let rtResult = result.retweeted_status_result?.result;
+        // TweetWithVisibilityResults ラッパーに対応
+        if (rtResult?.__typename === 'TweetWithVisibilityResults') rtResult = rtResult.tweet;
         const rtUser   = rtResult?.core?.user_results?.result?.legacy;
         const rtLegacy = rtResult?.legacy;
         if (rtResult && rtUser && rtLegacy) {
