@@ -192,8 +192,10 @@ function extractTweets(response) {
       let retweetedBy  = null;
 
       if (isRetweet) {
-        let rtResult = result.retweeted_status_result?.result;
-        // TweetWithVisibilityResults ラッパーに対応
+        const rt = result.retweeted_status_result;
+        // パターン1: rt.result が Tweet/TweetWithVisibilityResults
+        // パターン2: rt 自体が TweetWithVisibilityResults（.result なし）
+        let rtResult = rt?.result ?? rt;
         if (rtResult?.__typename === 'TweetWithVisibilityResults') rtResult = rtResult.tweet;
         const rtUser   = rtResult?.core?.user_results?.result?.legacy;
         const rtLegacy = rtResult?.legacy;
