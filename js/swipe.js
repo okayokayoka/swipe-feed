@@ -480,12 +480,6 @@ export class CardStack {
       this._flyCard(wrapper, 'dismiss');
     } else {
       this._returnCard(wrapper);
-      // 閾値未満でも水平優勢かつ50px以上 → フィード切替ジェスチャー
-      if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        document.dispatchEvent(new CustomEvent('feed-swipe', {
-          detail: { direction: dx > 0 ? 'right' : 'left' }
-        }));
-      }
     }
   }
 

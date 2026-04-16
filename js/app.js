@@ -397,11 +397,14 @@ function bindFeedSwipe() {
   let startX = 0, startY = 0, tracking = false;
 
   swipeScreen.addEventListener('pointerdown', (e) => {
-    // カード・UI要素上は無視（カードは setPointerCapture で奪うが念のため）
-    if (e.target.closest('.card-wrapper'))    return;
-    if (e.target.closest('.action-buttons')) return;
-    if (e.target.closest('.feed-tabs'))      return;
-    if (e.target.closest('.bottom-nav'))     return;
+    // ボタン・タブ・ナビは無視
+    if (e.target.closest('button'))      return;
+    if (e.target.closest('.feed-tabs'))  return;
+    if (e.target.closest('.bottom-nav')) return;
+    // カードスタックエリアより上（カード位置）は無視
+    const cardStackArea = document.querySelector('.card-stack-area');
+    if (cardStackArea && e.clientY <= cardStackArea.getBoundingClientRect().bottom) return;
+
     startX = e.clientX;
     startY = e.clientY;
     tracking = true;
@@ -418,10 +421,8 @@ function bindFeedSwipe() {
 
     const idx = feeds.findIndex(f => f.id === currentFeedId);
     if (dx < 0 && idx < feeds.length - 1) {
-      // 左スワイプ → 次のフィード
       switchFeed(feeds[idx + 1].id);
     } else if (dx > 0 && idx > 0) {
-      // 右スワイプ → 前のフィード
       switchFeed(feeds[idx - 1].id);
     }
   });
@@ -552,14 +553,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // バックグラウンドスワイプでフィード切替
   bindFeedSwipe();
-
-  // カード上の水平スワイプ（閾値未満）でもフィード切替
-  document.addEventListener('feed-swipe', (e) => {
-    const { direction } = e.detail;
-    const idx = feeds.findIndex(f => f.id === currentFeedId);
-    if (direction === 'left'  && idx < feeds.length - 1) switchFeed(feeds[idx + 1].id);
-    if (direction === 'right' && idx > 0)                switchFeed(feeds[idx - 1].id);
-  });
 
   // 起動
   await init();
