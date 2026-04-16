@@ -287,13 +287,10 @@ function sortByAlgorithm(posts, authorsMap) {
 // バックアップ / リストア
 // ────────────────────────────────────────
 
-/** デバッグ用: posts と swipes をすべて削除してカードをリセット */
+/** デバッグ用: posts キャッシュを削除してカードをリセット（スワイプ履歴は保持） */
 export async function clearPostsAndSwipes() {
   const db = await openDB();
-  await Promise.all([
-    wrap(db.transaction('posts',  'readwrite').objectStore('posts').clear()),
-    wrap(db.transaction('swipes', 'readwrite').objectStore('swipes').clear()),
-  ]);
+  await wrap(db.transaction('posts', 'readwrite').objectStore('posts').clear());
 }
 
 /** ブックマークをJSONとしてエクスポート */

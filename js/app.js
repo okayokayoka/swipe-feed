@@ -72,7 +72,7 @@ async function init() {
 async function setupMainScreen() {
   authorsMap = await getAuthorsMap();
   buildFeedTabs();
-  buildStack();
+  if (!stack) buildStack();  // 初回のみ作成（重複リスナー防止）
   await loadFeed(currentFeedId);
 }
 
