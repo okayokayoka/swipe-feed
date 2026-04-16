@@ -6,7 +6,7 @@
  * アプリシェル（HTML/CSS/JS）のみキャッシュする。
  */
 
-const CACHE_NAME = 'swipe-app-v2';
+const CACHE_NAME = 'swipe-app-v3';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -41,6 +41,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // フェッチ: シェルはキャッシュ優先、APIリクエストはネットワークのみ
+// バックグラウンド更新は cache:'reload' で CDN キャッシュをバイパス
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -51,7 +52,8 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then(cached => {
       // キャッシュがあればそれを返し、バックグラウンドで更新（Stale-While-Revalidate）
       if (cached) {
-        const update = fetch(event.request).then(resp => {
+        const freshReq = new Request(event.request, { cache: 'reload' });
+        const update = fetch(freshReq).then(resp => {
           if (resp.ok) {
             caches.open(CACHE_NAME).then(c => c.put(event.request, resp.clone()));
           }
@@ -60,7 +62,8 @@ self.addEventListener('fetch', (event) => {
         void update;
         return cached;
       }
-      return fetch(event.request);
+      // キャッシュなし（クリア直後）: CDN をバイパスして最新を取得
+      return fetch(new Request(event.request, { cache: 'reload' }));
     })
   );
 });
