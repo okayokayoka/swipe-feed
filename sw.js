@@ -6,7 +6,7 @@
  * アプリシェル（HTML/CSS/JS）のみキャッシュする。
  */
 
-const CACHE_NAME = 'swipe-app-v1';
+const CACHE_NAME = 'swipe-app-v2';
 const SHELL_ASSETS = [
   './',
   './index.html',

@@ -391,43 +391,39 @@ function showScreen(name) {
 // バックグラウンドスワイプでフィード切替
 // ────────────────────────────────────────────────────────────────
 function bindFeedSwipe() {
-  const swipeScreen = document.getElementById('screen-swipe');
-  if (!swipeScreen) return;
-
   let startX = 0, startY = 0, tracking = false;
 
-  swipeScreen.addEventListener('pointerdown', (e) => {
-    // ボタン・タブ・ナビは無視
-    if (e.target.closest('button'))      return;
-    if (e.target.closest('.feed-tabs'))  return;
-    if (e.target.closest('.bottom-nav')) return;
-    // カードスタックエリアより上（カード位置）は無視
+  // pointerdown: スワイプ画面のカード下エリアのみトラッキング開始
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button'))         return;
+    if (e.target.closest('.feed-tabs'))     return;
+    if (e.target.closest('.bottom-nav'))    return;
+    if (e.target.closest('.card-wrapper'))  return;
+    if (!e.target.closest('#screen-swipe')) return;
+
     const cardStackArea = document.querySelector('.card-stack-area');
     if (cardStackArea && e.clientY <= cardStackArea.getBoundingClientRect().bottom) return;
 
     startX = e.clientX;
     startY = e.clientY;
     tracking = true;
-  });
+  }, { passive: true });
 
-  swipeScreen.addEventListener('pointerup', (e) => {
+  // pointerup: document レベルで受けることで指が別要素上で離れても確実に捕捉
+  document.addEventListener('pointerup', (e) => {
     if (!tracking) return;
     tracking = false;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    // 水平方向優勢かつ閾値以上でフィード切替
-    if (Math.abs(dx) < 60) return;
+    if (Math.abs(dx) < 50) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
 
     const idx = feeds.findIndex(f => f.id === currentFeedId);
-    if (dx < 0 && idx < feeds.length - 1) {
-      switchFeed(feeds[idx + 1].id);
-    } else if (dx > 0 && idx > 0) {
-      switchFeed(feeds[idx - 1].id);
-    }
-  });
+    if (dx < 0 && idx < feeds.length - 1) switchFeed(feeds[idx + 1].id);
+    if (dx > 0 && idx > 0)                switchFeed(feeds[idx - 1].id);
+  }, { passive: true });
 
-  swipeScreen.addEventListener('pointercancel', () => { tracking = false; });
+  document.addEventListener('pointercancel', () => { tracking = false; }, { passive: true });
 }
 
 // ────────────────────────────────────────────────────────────────
