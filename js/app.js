@@ -393,37 +393,48 @@ function showScreen(name) {
 function bindFeedSwipe() {
   let startX = 0, startY = 0, tracking = false;
 
-  // pointerdown: スワイプ画面のカード下エリアのみトラッキング開始
-  document.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button'))         return;
-    if (e.target.closest('.feed-tabs'))     return;
-    if (e.target.closest('.bottom-nav'))    return;
-    if (e.target.closest('.card-wrapper'))  return;
-    if (!e.target.closest('#screen-swipe')) return;
+  function isValidZone(target, clientY) {
+    if (target.closest('button'))         return false;
+    if (target.closest('.feed-tabs'))     return false;
+    if (target.closest('.bottom-nav'))    return false;
+    if (target.closest('.card-wrapper'))  return false;
+    if (!target.closest('#screen-swipe')) return false;
+    const csa = document.querySelector('.card-stack-area');
+    if (csa && clientY <= csa.getBoundingClientRect().bottom) return false;
+    return true;
+  }
 
-    const cardStackArea = document.querySelector('.card-stack-area');
-    if (cardStackArea && e.clientY <= cardStackArea.getBoundingClientRect().bottom) return;
-
-    startX = e.clientX;
-    startY = e.clientY;
+  document.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    const csa = document.querySelector('.card-stack-area');
+    const csaBottom = csa ? Math.round(csa.getBoundingClientRect().bottom) : '?';
+    const inZone = isValidZone(e.target, t.clientY);
+    // デバッグ: タッチ位置とゾーン判定を表示
+    showToast(`touch y=${Math.round(t.clientY)} csaBot=${csaBottom} zone=${inZone} el=${e.target.className.slice(0,20) || e.target.tagName}`, 3000);
+    if (!inZone) return;
+    startX = t.clientX;
+    startY = t.clientY;
     tracking = true;
   }, { passive: true });
 
-  // pointerup: document レベルで受けることで指が別要素上で離れても確実に捕捉
-  document.addEventListener('pointerup', (e) => {
+  document.addEventListener('touchend', (e) => {
     if (!tracking) return;
     tracking = false;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    showToast(`end dx=${Math.round(dx)} dy=${Math.round(dy)} ok=${Math.abs(dx)>=50 && Math.abs(dx)>Math.abs(dy)*1.5}`, 3000);
     if (Math.abs(dx) < 50) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
-
     const idx = feeds.findIndex(f => f.id === currentFeedId);
     if (dx < 0 && idx < feeds.length - 1) switchFeed(feeds[idx + 1].id);
     if (dx > 0 && idx > 0)                switchFeed(feeds[idx - 1].id);
   }, { passive: true });
 
-  document.addEventListener('pointercancel', () => { tracking = false; }, { passive: true });
+  document.addEventListener('touchcancel', () => {
+    showToast('touchcancel fired', 2000);
+    tracking = false;
+  }, { passive: true });
 }
 
 // ────────────────────────────────────────────────────────────────

@@ -542,6 +542,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   gap: 20px;
   padding: 10px 24px 14px;
   flex-shrink: 0;
+  touch-action: pan-y; /* 水平スワイプを JS で処理（iOS での pointercancel 回避） */
 }
 
 .action-btn {
