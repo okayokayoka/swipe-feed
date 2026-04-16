@@ -418,7 +418,7 @@ function bindFeedSwipe() {
     const t = e.changedTouches[0];
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
-    if (Math.abs(dx) < 50) return;
+    if (Math.abs(dx) < 60) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
     const idx = feeds.findIndex(f => f.id === currentFeedId);
     if (dx < 0 && idx < feeds.length - 1) switchFeed(feeds[idx + 1].id);
