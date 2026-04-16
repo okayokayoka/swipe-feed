@@ -175,9 +175,11 @@ async function switchFeed(feedId) {
   if (feedId === currentFeedId) return;
   currentFeedId = feedId;
 
-  // タブのactive切替
+  // タブのactive切替 & スクロール
   document.querySelectorAll('.feed-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.feedId === feedId);
+    const isActive = t.dataset.feedId === feedId;
+    t.classList.toggle('active', isActive);
+    if (isActive) t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   });
 
   await loadFeed(feedId);
@@ -386,6 +388,48 @@ function showScreen(name) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// バックグラウンドスワイプでフィード切替
+// ────────────────────────────────────────────────────────────────
+function bindFeedSwipe() {
+  const swipeScreen = document.getElementById('screen-swipe');
+  if (!swipeScreen) return;
+
+  let startX = 0, startY = 0, tracking = false;
+
+  swipeScreen.addEventListener('pointerdown', (e) => {
+    // カード・UI要素上は無視（カードは setPointerCapture で奪うが念のため）
+    if (e.target.closest('.card-wrapper'))    return;
+    if (e.target.closest('.action-buttons')) return;
+    if (e.target.closest('.feed-tabs'))      return;
+    if (e.target.closest('.bottom-nav'))     return;
+    startX = e.clientX;
+    startY = e.clientY;
+    tracking = true;
+  });
+
+  swipeScreen.addEventListener('pointerup', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    // 水平方向優勢かつ閾値以上でフィード切替
+    if (Math.abs(dx) < 60) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+    const idx = feeds.findIndex(f => f.id === currentFeedId);
+    if (dx < 0 && idx < feeds.length - 1) {
+      // 左スワイプ → 次のフィード
+      switchFeed(feeds[idx + 1].id);
+    } else if (dx > 0 && idx > 0) {
+      // 右スワイプ → 前のフィード
+      switchFeed(feeds[idx - 1].id);
+    }
+  });
+
+  swipeScreen.addEventListener('pointercancel', () => { tracking = false; });
+}
+
+// ────────────────────────────────────────────────────────────────
 // ローディング
 // ────────────────────────────────────────────────────────────────
 function showLoading(show) {
@@ -494,6 +538,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await setupMainScreen();
     showScreen('swipe');
   });
+
+  // バックグラウンドスワイプでフィード切替
+  bindFeedSwipe();
 
   // 起動
   await init();
