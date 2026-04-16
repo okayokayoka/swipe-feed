@@ -504,6 +504,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     showScreen('swipe');
   });
 
+  // デバッグ: Service Worker キャッシュをクリア
+  document.getElementById('btn-clear-cache')?.addEventListener('click', async () => {
+    if (!confirm('Service Worker のキャッシュをすべて削除してリロードします。よろしいですか？')) return;
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.update();
+    showToast('キャッシュをクリアしました。リロードします…');
+    setTimeout(() => location.reload(true), 800);
+  });
+
   // フィード追加
   document.getElementById('btn-add-feed')?.addEventListener('click', () => {
     const name   = prompt('フィード名 (例: tech)');
