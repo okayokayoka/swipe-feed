@@ -542,6 +542,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // バックグラウンドスワイプでフィード切替
   bindFeedSwipe();
 
+  // カード上の水平スワイプ（閾値未満）でもフィード切替
+  document.addEventListener('feed-swipe', (e) => {
+    const { direction } = e.detail;
+    const idx = feeds.findIndex(f => f.id === currentFeedId);
+    if (direction === 'left'  && idx < feeds.length - 1) switchFeed(feeds[idx + 1].id);
+    if (direction === 'right' && idx > 0)                switchFeed(feeds[idx - 1].id);
+  });
+
   // 起動
   await init();
 });
