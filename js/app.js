@@ -406,12 +406,7 @@ function bindFeedSwipe() {
 
   document.addEventListener('touchstart', (e) => {
     const t = e.touches[0];
-    const csa = document.querySelector('.card-stack-area');
-    const csaBottom = csa ? Math.round(csa.getBoundingClientRect().bottom) : '?';
-    const inZone = isValidZone(e.target, t.clientY);
-    // デバッグ: タッチ位置とゾーン判定を表示
-    showToast(`touch y=${Math.round(t.clientY)} csaBot=${csaBottom} zone=${inZone} el=${e.target.className.slice(0,20) || e.target.tagName}`, 3000);
-    if (!inZone) return;
+    if (!isValidZone(e.target, t.clientY)) return;
     startX = t.clientX;
     startY = t.clientY;
     tracking = true;
@@ -423,7 +418,6 @@ function bindFeedSwipe() {
     const t = e.changedTouches[0];
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
-    showToast(`end dx=${Math.round(dx)} dy=${Math.round(dy)} ok=${Math.abs(dx)>=50 && Math.abs(dx)>Math.abs(dy)*1.5}`, 3000);
     if (Math.abs(dx) < 50) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
     const idx = feeds.findIndex(f => f.id === currentFeedId);
@@ -431,10 +425,7 @@ function bindFeedSwipe() {
     if (dx > 0 && idx > 0)                switchFeed(feeds[idx - 1].id);
   }, { passive: true });
 
-  document.addEventListener('touchcancel', () => {
-    showToast('touchcancel fired', 2000);
-    tracking = false;
-  }, { passive: true });
+  document.addEventListener('touchcancel', () => { tracking = false; }, { passive: true });
 }
 
 // ────────────────────────────────────────────────────────────────
