@@ -888,7 +888,8 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
    ──────────────────────────────────────────────────────────────── */
 .loading-overlay {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; left: 0;
+  bottom: var(--nav-height); /* nav は常に操作可能に保つ */
   background: var(--color-bg);
   display: flex;
   align-items: center;

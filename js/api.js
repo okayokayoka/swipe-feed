@@ -48,17 +48,25 @@ async function callViaProxy(url, headers, workerUrl, proxySecret) {
   const reqHeaders = { 'Content-Type': 'application/json' };
   if (proxySecret) reqHeaders['X-Proxy-Secret'] = proxySecret;
 
-  const resp = await fetch(workerUrl + '/proxy', {
-    method: 'POST',
-    headers: reqHeaders,
-    body: JSON.stringify({ url, headers }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Proxy error ${resp.status}: ${errText}`);
+  try {
+    const resp = await fetch(workerUrl + '/proxy', {
+      method: 'POST',
+      headers: reqHeaders,
+      body: JSON.stringify({ url, headers }),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Proxy error ${resp.status}: ${errText}`);
+    }
+    return resp.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return resp.json();
 }
 
 /**
