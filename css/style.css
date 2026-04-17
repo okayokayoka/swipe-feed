@@ -71,7 +71,8 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 #app {
   display: flex;
   flex-direction: column;
-  height: 100dvh; /* dynamic viewport height（ブラウザUI考慮） */
+  height: 100vh;   /* fallback: dvh 未対応ブラウザ向け */
+  height: 100dvh;  /* dynamic viewport height（ブラウザUI考慮） */
   max-width: 480px;
   margin: 0 auto;
   position: relative;
@@ -607,6 +608,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 /* ────────────────────────────────────────────────────────────────
    ボトムナビゲーション
    ──────────────────────────────────────────────────────────────── */
+/* セットアップ画面ではナビゲーションを非表示 */
+#screen-setup.active ~ .bottom-nav { display: none; }
+
 .bottom-nav {
   display: flex;
   align-items: stretch;
