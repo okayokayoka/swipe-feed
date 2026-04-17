@@ -76,6 +76,8 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   max-width: 480px;
   margin: 0 auto;
   position: relative;
+  /* fixed nav の高さ分だけ下部に余白（nav が content を隠さないよう） */
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -612,6 +614,13 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 #screen-setup.active ~ .bottom-nav { display: none; }
 
 .bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  z-index: 50;
   display: flex;
   align-items: stretch;
   height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
@@ -620,7 +629,6 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border-top: 1px solid var(--color-border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  flex-shrink: 0;
 }
 
 .nav-btn {
