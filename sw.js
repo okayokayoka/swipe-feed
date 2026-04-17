@@ -6,7 +6,7 @@
  * アプリシェル（HTML/CSS/JS）のみキャッシュする。
  */
 
-const CACHE_NAME = 'swipe-app-v4';
+const CACHE_NAME = 'swipe-app-v5';
 
 // インストール: 即座にアクティブ化のみ（キャッシュはフェッチ時に構築）
 self.addEventListener('install', (event) => {

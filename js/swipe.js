@@ -12,6 +12,42 @@
  */
 
 // ──────────────────────────────────────────────────────────────
+// オンスクリーンデバッグログ (?debug=1 で有効)
+// ──────────────────────────────────────────────────────────────
+const _debugEnabled = new URLSearchParams(location.search).has('debug');
+const _dbgLog = (() => {
+  if (!_debugEnabled) return () => {};
+  const panel = document.createElement('div');
+  Object.assign(panel.style, {
+    position: 'fixed', top: '0', left: '0', right: '0',
+    maxHeight: '45vh', overflowY: 'auto',
+    background: 'rgba(0,0,0,0.82)', color: '#0f0', fontSize: '11px',
+    fontFamily: 'monospace', padding: '4px', zIndex: '99999',
+    pointerEvents: 'none', wordBreak: 'break-all',
+  });
+  const append = () => {
+    document.body.appendChild(panel);
+    const init = document.createElement('div');
+    init.textContent = '[DEBUG MODE ON] tap an image to test';
+    panel.appendChild(init);
+  };
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', append)
+    : append();
+  let seq = 0;
+  return (label, data = {}) => {
+    const t = (performance.now() / 1000).toFixed(2);
+    const parts = [`[${t}] #${++seq} ${label}`];
+    for (const [k, v] of Object.entries(data)) parts.push(`${k}=${v}`);
+    const line = document.createElement('div');
+    line.textContent = parts.join(' | ');
+    panel.appendChild(line);
+    if (panel.children.length > 60) panel.firstChild.remove();
+    panel.scrollTop = panel.scrollHeight;
+  };
+})();
+
+// ──────────────────────────────────────────────────────────────
 // 定数
 // ──────────────────────────────────────────────────────────────
 const THRESHOLD_X = 110;   // px: 左右スワイプ確定閾値
@@ -169,10 +205,12 @@ function stripUrls(str) {
 // 画像ビューアー（ライトボックス）
 // ──────────────────────────────────────────────────────────────
 function openImageViewer(url) {
+  _dbgLog('openImageViewer CALLED', { url: url.slice(-30) });
   const overlay = document.createElement('div');
   overlay.className = 'img-viewer';
   overlay.innerHTML = `<img class="img-viewer-img" src="${escHtml(url)}" alt="拡大表示" draggable="false">`;
   document.body.appendChild(overlay);
+  _dbgLog('overlay appended', { zIndex: getComputedStyle(overlay).zIndex, display: getComputedStyle(overlay).display });
 
   const img = overlay.querySelector('.img-viewer-img');
   requestAnimationFrame(() => overlay.classList.add('open'));
@@ -469,6 +507,8 @@ export class CardStack {
     topWrapper.addEventListener('pointermove', this._onPointerMove.bind(this));
     topWrapper.addEventListener('pointerup',   this._onPointerUp.bind(this));
     topWrapper.addEventListener('pointercancel', this._onPointerCancel.bind(this));
+    topWrapper.addEventListener('gotpointercapture',  (e) => _dbgLog('gotpointercapture',  { id: e.pointerId }));
+    topWrapper.addEventListener('lostpointercapture', (e) => _dbgLog('lostpointercapture', { id: e.pointerId }));
 
     // 画像タップでビューアーを開く（click はポインターキャプチャの影響を受けない）
     topWrapper.querySelectorAll('.card-image-single img, .card-image-scroll img').forEach(img => {
@@ -516,10 +556,15 @@ export class CardStack {
   }
 
   _onPointerDown(e) {
+    _dbgLog('pointerdown', {
+      type: e.pointerType, tag: e.target.tagName,
+      cls: (e.target.className+'').slice(0,30),
+      x: e.clientX|0, y: e.clientY|0,
+    });
     // リンク・動画再生ボタンのクリックは無視
-    if (e.target.closest('a')) return;
-    if (e.target.closest('.card-video-play')) return;
-    if (e.target.closest('.card-video-el')) return;
+    if (e.target.closest('a')) { _dbgLog('→ early-return:a'); return; }
+    if (e.target.closest('.card-video-play')) { _dbgLog('→ early-return:video-play'); return; }
+    if (e.target.closest('.card-video-el')) { _dbgLog('→ early-return:video-el'); return; }
     this._startTarget = e.target;
     this._dragging = true;
     this._startX = e.clientX;
@@ -530,6 +575,7 @@ export class CardStack {
 
     const wrapper = e.currentTarget;
     wrapper.setPointerCapture(e.pointerId);
+    _dbgLog('setPointerCapture', { hasCap: wrapper.hasPointerCapture(e.pointerId) });
     // ドラッグ中はtransitionを無効化してカクつきを防ぐ
     wrapper.style.transition = 'none';
     wrapper.style.willChange = 'transform';
@@ -596,6 +642,12 @@ export class CardStack {
   _onPointerUp(e) {
     clearTimeout(this._longPressTimer);
     this._longPressTimer = null;
+    _dbgLog('pointerup', {
+      type: e.pointerType, tag: e.target.tagName,
+      dx: this._curX|0, dy: this._curY|0,
+      startTag: this._startTarget?.tagName,
+      dragging: this._dragging,
+    });
     if (!this._dragging) return; // 長押し発動済みならスワイプしない
     this._dragging = false;
 
@@ -606,6 +658,7 @@ export class CardStack {
     // 画像タップ: ビューアーを開く
     if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
       const t = this._startTarget;
+      _dbgLog('tap-check', { startTag: t?.tagName, inImgContainer: !!(t?.closest('.card-image-single, .card-image-scroll')) });
       if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
         this._returnCard(wrapper);
         openImageViewer(t.src);
@@ -627,6 +680,12 @@ export class CardStack {
   _onPointerCancel(e) {
     clearTimeout(this._longPressTimer);
     this._longPressTimer = null;
+    _dbgLog('pointercancel', {
+      type: e.pointerType, tag: e.target.tagName,
+      dx: this._curX|0, dy: this._curY|0,
+      startTag: this._startTarget?.tagName,
+      dragging: this._dragging,
+    });
     if (!this._dragging) return;
     this._dragging = false;
 
@@ -634,6 +693,7 @@ export class CardStack {
     // 移動量が小さければタップとして扱う。
     if (Math.abs(this._curX) < 15 && Math.abs(this._curY) < 15) {
       const t = this._startTarget;
+      _dbgLog('cancel-tap-check', { startTag: t?.tagName, inImgContainer: !!(t?.closest('.card-image-single, .card-image-scroll')) });
       if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
         this._returnCard(e.currentTarget);
         openImageViewer(t.src);
