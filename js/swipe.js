@@ -53,7 +53,7 @@ function relativeTime(createdAt) {
 // ──────────────────────────────────────────────────────────────
 function buildMediaItemHTML(m) {
   if (m.type === 'photo') {
-    return `<img src="${escHtml(m.url)}" alt="ツイート画像" loading="lazy" onerror="this.style.display='none'">`;
+    return `<img src="${escHtml(m.url)}" alt="ツイート画像" loading="lazy" draggable="false" onerror="this.style.display='none'">`;
   }
   // video / animated_gif: 初期はポスター画像+再生ボタン、タップで<video>に置換
   const badge = m.type === 'animated_gif' ? '<span class="card-media-badge">GIF</span>' : '';
@@ -163,6 +163,128 @@ function truncate(str, len) {
 
 function stripUrls(str) {
   return str.replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// ──────────────────────────────────────────────────────────────
+// 画像ビューアー（ライトボックス）
+// ──────────────────────────────────────────────────────────────
+function openImageViewer(url) {
+  const overlay = document.createElement('div');
+  overlay.className = 'img-viewer';
+  overlay.innerHTML = `<img class="img-viewer-img" src="${escHtml(url)}" alt="拡大表示" draggable="false">`;
+  document.body.appendChild(overlay);
+
+  const img = overlay.querySelector('.img-viewer-img');
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  let scale = 1;
+  let tx = 0;
+  let ty = 0;
+  const pts = new Map();
+  let lastDist = null;
+  let lastTap = 0;
+  let tapTimer = null;
+  let startX = 0;
+  let startY = 0;
+  let startTX = 0;
+  let startTY = 0;
+  let moved = false;
+  const openedAt = Date.now();
+
+  function apply(animated = false) {
+    img.style.transition = animated ? 'transform 0.22s ease' : 'none';
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }
+
+  function clamp() {
+    if (scale <= 1) { tx = 0; ty = 0; return; }
+    const maxX = (overlay.clientWidth  * (scale - 1)) / 2;
+    const maxY = (overlay.clientHeight * (scale - 1)) / 2;
+    tx = Math.max(-maxX, Math.min(maxX, tx));
+    ty = Math.max(-maxY, Math.min(maxY, ty));
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 250);
+  }
+
+  overlay.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    // Androidでは pointerup 後に合成マウスイベントが発火してビューアを即閉じてしまう。
+    // 開いた直後 350ms 以内のイベントは無視する。
+    if (Date.now() - openedAt < 350) return;
+    overlay.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) {
+      startX = e.clientX;
+      startY = e.clientY;
+      startTX = tx;
+      startTY = ty;
+      moved = false;
+      lastDist = null;
+    }
+  });
+
+  overlay.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pts.size === 2) {
+      const [p1, p2] = [...pts.values()];
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (lastDist !== null) {
+        scale = Math.max(1, Math.min(5, scale * dist / lastDist));
+        clamp();
+        apply();
+      }
+      lastDist = dist;
+      moved = true;
+    } else {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+      if (scale > 1) {
+        tx = startTX + dx;
+        ty = startTY + dy;
+        apply();
+      }
+    }
+  });
+
+  overlay.addEventListener('pointerup', (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size > 0) { lastDist = null; return; }
+    lastDist = null;
+
+    const dy = e.clientY - startY;
+
+    if (!moved) {
+      const now = Date.now();
+      if (now - lastTap < 280) {
+        clearTimeout(tapTimer);
+        lastTap = 0;
+        if (scale > 1) { scale = 1; tx = 0; ty = 0; }
+        else { scale = 2.5; }
+        apply(true);
+      } else {
+        lastTap = now;
+        tapTimer = setTimeout(() => {
+          if (scale <= 1) close();
+        }, 280);
+      }
+    } else if (scale <= 1 && dy > 80) {
+      close();
+    } else {
+      clamp();
+      apply(true);
+    }
+  });
+
+  overlay.addEventListener('pointercancel', (e) => {
+    pts.delete(e.pointerId);
+    lastDist = null;
+  });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -348,6 +470,14 @@ export class CardStack {
     topWrapper.addEventListener('pointerup',   this._onPointerUp.bind(this));
     topWrapper.addEventListener('pointercancel', this._onPointerCancel.bind(this));
 
+    // 画像タップでビューアーを開く（click はポインターキャプチャの影響を受けない）
+    topWrapper.querySelectorAll('.card-image-single img, .card-image-scroll img').forEach(img => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openImageViewer(img.src);
+      });
+    });
+
     // 動画再生ボタン
     topWrapper.querySelectorAll('.card-video-play').forEach(btn => {
       btn.addEventListener('click', this._onVideoPlayClick.bind(this));
@@ -390,6 +520,7 @@ export class CardStack {
     if (e.target.closest('a')) return;
     if (e.target.closest('.card-video-play')) return;
     if (e.target.closest('.card-video-el')) return;
+    this._startTarget = e.target;
     this._dragging = true;
     this._startX = e.clientX;
     this._startY = e.clientY;
@@ -472,6 +603,16 @@ export class CardStack {
     const dy = this._curY;
     const wrapper = e.currentTarget;
 
+    // 画像タップ: ビューアーを開く
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+      const t = this._startTarget;
+      if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
+        this._returnCard(wrapper);
+        openImageViewer(t.src);
+        return;
+      }
+    }
+
     if (dy < THRESHOLD_Y && Math.abs(dx) < 80) {
       this._flyCard(wrapper, 'bookmark');
     } else if (dx > THRESHOLD_X) {
@@ -488,6 +629,18 @@ export class CardStack {
     this._longPressTimer = null;
     if (!this._dragging) return;
     this._dragging = false;
+
+    // iOS は画像タッチを pointercancel でキャンセルすることがある。
+    // 移動量が小さければタップとして扱う。
+    if (Math.abs(this._curX) < 15 && Math.abs(this._curY) < 15) {
+      const t = this._startTarget;
+      if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
+        this._returnCard(e.currentTarget);
+        openImageViewer(t.src);
+        return;
+      }
+    }
+
     this._returnCard(e.currentTarget);
   }
 
