@@ -8,9 +8,24 @@
 
 const CACHE_NAME = 'swipe-app-v11';
 
-// インストール: 即座にアクティブ化のみ（キャッシュはフェッチ時に構築）
+// インストール: アプリシェルを precache してオフライン起動を保証
+const PRECACHE_URLS = [
+  './',
+  './index.html',
+  './css/style.css',
+  './js/app.js',
+  './js/api.js',
+  './js/db.js',
+  './js/swipe.js',
+  './manifest.json',
+];
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
+  );
 });
 
 // アクティベート: 古いキャッシュを削除
