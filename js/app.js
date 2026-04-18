@@ -18,7 +18,7 @@ import {
   addBookmark, removeBookmark, getBookmarks, getBookmarkCount,
   getAuthorsMap, exportBookmarks, clearPostsCache,
 } from './db.js';
-import { CardStack, triggerSwipeAction } from './swipe.js';
+import { CardStack, triggerSwipeAction, buildCardHTML } from './swipe.js';
 
 // ────────────────────────────────────────────────────────────────
 // デフォルトフィード設定
@@ -303,10 +303,10 @@ async function renderBookmarks(query = '') {
       </div>
       <button class="bookmark-delete-btn" aria-label="削除" data-id="${item.tweetId}">×</button>`;
 
-    // タップでツイートを開く
+    // タップでカードプレビューを表示
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('bookmark-delete-btn')) return;
-      window.open(item.link, '_blank', 'noopener');
+      showBookmarkCard(item);
     });
 
     // 削除ボタン
@@ -321,6 +321,24 @@ async function renderBookmarks(query = '') {
 
     list.appendChild(el);
   });
+}
+
+// ────────────────────────────────────────────────────────────────
+// カードプレビューモーダル
+// ────────────────────────────────────────────────────────────────
+function showBookmarkCard(item) {
+  const modal = document.getElementById('card-preview-modal');
+  const content = document.getElementById('card-preview-content');
+  if (!modal || !content) return;
+
+  // bookmarkのデータ構造（tweetId）をbuildCardHTMLが期待する形（id）に変換
+  const tweetLike = { ...item, id: item.tweetId };
+  content.innerHTML = buildCardHTML(tweetLike, item.feedId ?? '');
+  modal.classList.remove('hidden');
+}
+
+function hideBookmarkCard() {
+  document.getElementById('card-preview-modal')?.classList.add('hidden');
 }
 
 function relativeTime(ts) {
@@ -525,6 +543,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('bookmark-search')?.addEventListener('input', (e) => {
     renderBookmarks(e.target.value);
   });
+
+  // カードプレビューモーダルを閉じる
+  document.getElementById('card-preview-close')?.addEventListener('click', hideBookmarkCard);
+  document.querySelector('.card-preview-backdrop')?.addEventListener('click', hideBookmarkCard);
 
   // 設定の保存
   document.getElementById('btn-save-settings')?.addEventListener('click', saveSettings);

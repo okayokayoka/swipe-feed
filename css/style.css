@@ -1027,6 +1027,58 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 /* ────────────────────────────────────────────────────────────────
    ダークモード（常時ダーク設計なので@media不要だが、OS設定でライトモードの場合の保険）
    ──────────────────────────────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────
+   カードプレビューモーダル（ブックマーク一覧からのカード表示）
+   ──────────────────────────────────────────────────────────────── */
+.card-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+}
+.card-preview-modal.hidden {
+  display: none;
+}
+.card-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+}
+.card-preview-inner {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  z-index: 1;
+}
+.card-preview-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-preview-content {
+  position: relative;
+  height: min(calc(100dvh - 80px), 560px);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
 @media (prefers-color-scheme: light) {
   /* このアプリはダーク固定。ライトモードでも強制的にダーク表示 */
   :root {

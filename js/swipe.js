@@ -106,7 +106,7 @@ function buildMediaItemHTML(m) {
 // ──────────────────────────────────────────────────────────────
 // カードのHTML生成
 // ──────────────────────────────────────────────────────────────
-function buildCardHTML(tweet, feedId, affinityCount = 0) {
+export function buildCardHTML(tweet, feedId, affinityCount = 0) {
   const handle = tweet.author?.handle ?? '';
   const name   = tweet.author?.name ?? handle;
   const avatar = tweet.author?.avatar ?? '';
