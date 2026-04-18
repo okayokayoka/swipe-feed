@@ -326,6 +326,8 @@ async function renderBookmarks(query = '') {
 // ────────────────────────────────────────────────────────────────
 // カードプレビューモーダル
 // ────────────────────────────────────────────────────────────────
+let _bookmarkSwipeController = null;
+
 function showBookmarkCard(item) {
   const modal = document.getElementById('card-preview-modal');
   const content = document.getElementById('card-preview-content');
@@ -335,10 +337,72 @@ function showBookmarkCard(item) {
   const tweetLike = { ...item, id: item.tweetId };
   content.innerHTML = buildCardHTML(tweetLike, item.feedId ?? '');
   modal.classList.remove('hidden');
+
+  const cardEl = content.querySelector('.card');
+  if (cardEl) bindBookmarkCardSwipe(cardEl);
 }
 
 function hideBookmarkCard() {
+  _bookmarkSwipeController?.abort();
+  _bookmarkSwipeController = null;
   document.getElementById('card-preview-modal')?.classList.add('hidden');
+}
+
+// カードをスワイプすると閉じる
+function bindBookmarkCardSwipe(cardEl) {
+  _bookmarkSwipeController?.abort();
+  _bookmarkSwipeController = new AbortController();
+  const { signal } = _bookmarkSwipeController;
+
+  const THRESHOLD = 80;
+  let startX = 0, startY = 0, dx = 0, dy = 0;
+  let tracking = false;
+
+  const shouldIgnore = (target) =>
+    target.closest('a, button, video, .card-image-scroll, .card-media-video');
+
+  cardEl.addEventListener('touchstart', (e) => {
+    if (shouldIgnore(e.target)) return;
+    const p = e.touches[0];
+    startX = p.clientX;
+    startY = p.clientY;
+    dx = 0; dy = 0;
+    tracking = true;
+    cardEl.style.transition = 'none';
+  }, { passive: true, signal });
+
+  cardEl.addEventListener('touchmove', (e) => {
+    if (!tracking) return;
+    const p = e.touches[0];
+    dx = p.clientX - startX;
+    dy = p.clientY - startY;
+    const rot = Math.max(-15, Math.min(15, dx / 20));
+    cardEl.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+    cardEl.style.opacity = String(Math.max(0.4, 1 - Math.hypot(dx, dy) / 500));
+  }, { passive: true, signal });
+
+  const endHandler = () => {
+    if (!tracking) return;
+    tracking = false;
+    const dist = Math.hypot(dx, dy);
+    cardEl.style.transition = 'transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.28s';
+
+    if (dist > THRESHOLD) {
+      const flyX = (dx / dist) * (window.innerWidth + 200);
+      const flyY = (dy / dist) * (window.innerHeight + 200);
+      const rot = Math.max(-30, Math.min(30, dx / 10));
+      cardEl.style.transform = `translate(${flyX}px, ${flyY}px) rotate(${rot}deg)`;
+      cardEl.style.opacity = '0';
+      setTimeout(hideBookmarkCard, 260);
+    } else {
+      cardEl.style.transform = '';
+      cardEl.style.opacity = '';
+    }
+    dx = 0; dy = 0;
+  };
+
+  cardEl.addEventListener('touchend', endHandler, { signal });
+  cardEl.addEventListener('touchcancel', endHandler, { signal });
 }
 
 function relativeTime(ts) {

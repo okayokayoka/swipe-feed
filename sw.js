@@ -6,7 +6,7 @@
  * アプリシェル（HTML/CSS/JS）のみキャッシュする。
  */
 
-const CACHE_NAME = 'swipe-app-v12';
+const CACHE_NAME = 'swipe-app-v13';
 
 // インストール: アプリシェルを precache してオフライン起動を保証
 const PRECACHE_URLS = [
