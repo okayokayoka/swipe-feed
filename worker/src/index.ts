@@ -5,9 +5,8 @@
  *   Body: { url: string, headers: Record<string, string> }
  *   Header: X-Proxy-Secret: <PROXY_SECRET>
  *
- * X の GraphQL API はブラウザから直接呼べないため（CORS）、
- * このWorkerが中継役となりCORSヘッダを付けて返す。
- * x.com / twitter.com 以外へのリクエストは拒否する。
+ * GET /media?url=<url>&secret=<PROXY_SECRET>
+ *   video.twimg.com への Range 対応ストリーミング中継
  */
 
 import { Hono } from 'hono'
@@ -19,28 +18,57 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// すべてのルートにCORSヘッダを付与
+// 許可するオリジン（GitHub Pages + ローカル開発）
+const ALLOWED_ORIGINS = [
+	'https://okayokayoka.github.io',
+	'http://localhost:8888',
+	'http://localhost',
+]
+
+// CORS: 許可オリジンのみ（* は使わない）
 app.use('*', cors({
-	origin: '*',
+	origin: (origin) => ALLOWED_ORIGINS.includes(origin) ? origin : '',
 	allowMethods: ['GET', 'POST', 'OPTIONS'],
 	allowHeaders: ['Content-Type', 'X-Proxy-Secret'],
+	exposeHeaders: ['Content-Length', 'Content-Range', 'Accept-Ranges', 'X-Upstream-Status'],
 }))
+
+// /proxy で転送を許可するヘッダの allowlist（open-relay 防止）
+const ALLOWED_PROXY_HEADERS = new Set([
+	'authorization',
+	'cookie',
+	'x-csrf-token',
+	'x-twitter-auth-type',
+	'x-twitter-active-user',
+	'x-twitter-client-language',
+	'user-agent',
+	'accept',
+	'accept-language',
+	'referer',
+	'origin',
+])
+
+/** シークレット検証。未設定（空）の場合は常に拒否 */
+function checkSecret(provided: string | undefined, expected: string | undefined): boolean {
+	if (!expected) return false
+	return provided === expected
+}
+
+/** リクエストの Origin に基づいて許可オリジンを返す */
+function getAllowedOrigin(origin: string | undefined): string {
+	return (origin && ALLOWED_ORIGINS.includes(origin)) ? origin : ''
+}
 
 // ヘルスチェック
 app.get('/', (c) => c.json({ status: 'ok', name: 'swipe-proxy' }))
 
 // CORSプロキシ本体
 app.post('/proxy', async (c) => {
-	// シークレットチェック（PROXY_SECRET が未設定の場合はスキップ）
-	const secret = c.env?.PROXY_SECRET
-	if (secret) {
-		const provided = c.req.header('X-Proxy-Secret')
-		if (provided !== secret) {
-			return c.json({ error: 'Unauthorized' }, 401)
-		}
+	// PROXY_SECRET 必須（未設定は設定ミスとして 401）
+	if (!checkSecret(c.req.header('X-Proxy-Secret'), c.env?.PROXY_SECRET)) {
+		return c.json({ error: 'Unauthorized' }, 401)
 	}
 
-	// リクエストボディの検証
 	let body: { url: string; headers: Record<string, string> }
 	try {
 		body = await c.req.json()
@@ -53,7 +81,7 @@ app.post('/proxy', async (c) => {
 		return c.json({ error: 'Missing url' }, 400)
 	}
 
-	// x.com / twitter.com 以外へのリクエストを拒否（セキュリティ）
+	// x.com / twitter.com 以外へのリクエストを拒否
 	let parsedUrl: URL
 	try {
 		parsedUrl = new URL(url)
@@ -61,21 +89,25 @@ app.post('/proxy', async (c) => {
 		return c.json({ error: 'Invalid url' }, 400)
 	}
 
-	const allowed = ['x.com', 'twitter.com', 'api.twitter.com']
-	const isAllowed = allowed.some(
+	const allowedHosts = ['x.com', 'twitter.com', 'api.twitter.com']
+	const isAllowed = allowedHosts.some(
 		(host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith('.' + host)
 	)
 	if (!isAllowed) {
 		return c.json({ error: `Disallowed host: ${parsedUrl.hostname}` }, 403)
 	}
 
-	// X API へリクエストを転送
+	// allowlist でフィルタした安全なヘッダだけ転送
+	const safeHeaders: Record<string, string> = {}
+	for (const [key, value] of Object.entries(headers ?? {})) {
+		if (ALLOWED_PROXY_HEADERS.has(key.toLowerCase())) {
+			safeHeaders[key] = value
+		}
+	}
+
 	let resp: Response
 	try {
-		resp = await fetch(url, {
-			method: 'GET',
-			headers: headers ?? {},
-		})
+		resp = await fetch(url, { method: 'GET', headers: safeHeaders })
 	} catch (e) {
 		return c.json({ error: `Fetch failed: ${String(e)}` }, 502)
 	}
@@ -86,26 +118,18 @@ app.post('/proxy', async (c) => {
 		status: resp.status,
 		headers: {
 			'Content-Type': resp.headers.get('Content-Type') ?? 'application/json',
-			'Access-Control-Allow-Origin': '*',
 			'X-Upstream-Status': String(resp.status),
 		},
 	})
 })
 
-// ────────────────────────────────────────
-// GET /media — 動画など大容量メディアのストリーミング中継
-// ────────────────────────────────────────
-// video.twimg.com の MP4 は外部サイトから直接読み込むと 403/CORS で失敗するため
-// Worker で中継する。Range ヘッダを中継してストリーミング再生に対応。
-// PROXY_SECRET はクエリパラメータ `secret` で渡す（video.src にヘッダを付けられないため）。
+// GET /media — 動画などのストリーミング中継
+// video.twimg.com の MP4 は外部から直接読み込むと 403/CORS で失敗するため Worker で中継。
+// Range ヘッダを中継してストリーミング再生に対応。
 app.get('/media', async (c) => {
-	// シークレットチェック
-	const secret = c.env?.PROXY_SECRET
-	if (secret) {
-		const provided = c.req.query('secret')
-		if (provided !== secret) {
-			return c.json({ error: 'Unauthorized' }, 401)
-		}
+	// PROXY_SECRET 必須
+	if (!checkSecret(c.req.query('secret'), c.env?.PROXY_SECRET)) {
+		return c.json({ error: 'Unauthorized' }, 401)
 	}
 
 	const url = c.req.query('url')
@@ -119,15 +143,12 @@ app.get('/media', async (c) => {
 	}
 
 	// twimg.com ドメインのみ許可
-	const allowed = ['twimg.com']
-	const isAllowed = allowed.some(
-		(host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith('.' + host)
-	)
+	const isAllowed = parsedUrl.hostname === 'twimg.com' || parsedUrl.hostname.endsWith('.twimg.com')
 	if (!isAllowed) {
 		return c.json({ error: `Disallowed host: ${parsedUrl.hostname}` }, 403)
 	}
 
-	// Range ヘッダを中継
+	// Range ヘッダを中継（ストリーミング再生に必要）
 	const rangeHeader = c.req.header('Range')
 	const fetchHeaders: Record<string, string> = {
 		'Referer': 'https://x.com/',
@@ -142,7 +163,7 @@ app.get('/media', async (c) => {
 		return c.json({ error: `Fetch failed: ${String(e)}` }, 502)
 	}
 
-	// 動画レスポンスヘッダを中継
+	// 必要なレスポンスヘッダのみ転送
 	const respHeaders = new Headers()
 	const forwardHeaders = [
 		'content-type',
@@ -157,8 +178,13 @@ app.get('/media', async (c) => {
 		const v = resp.headers.get(h)
 		if (v) respHeaders.set(h, v)
 	}
-	respHeaders.set('Access-Control-Allow-Origin', '*')
-	respHeaders.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+
+	// CORS: 許可オリジンのみ
+	const corsOrigin = getAllowedOrigin(c.req.header('Origin'))
+	if (corsOrigin) {
+		respHeaders.set('Access-Control-Allow-Origin', corsOrigin)
+		respHeaders.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+	}
 
 	return new Response(resp.body, {
 		status: resp.status,
