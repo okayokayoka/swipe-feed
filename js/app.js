@@ -16,7 +16,7 @@ import {
   savePosts, getUnreadPosts,
   recordSwipe, incrementAuthorLike,
   addBookmark, removeBookmark, getBookmarks, getBookmarkCount,
-  getAuthorsMap, exportBookmarks, clearPostsAndSwipes,
+  getAuthorsMap, exportBookmarks, clearPostsCache,
 } from './db.js';
 import { CardStack, triggerSwipeAction } from './swipe.js';
 
@@ -537,8 +537,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // デバッグ: カードをすべてクリア
   document.getElementById('btn-clear-posts')?.addEventListener('click', async () => {
-    if (!confirm('posts と swipes をすべて削除します。ブックマークは残ります。よろしいですか？')) return;
-    await clearPostsAndSwipes();
+    if (!confirm('取得済みツイートのキャッシュを削除して再取得します。\nlike・dismiss・ブックマーク履歴は残ります。よろしいですか？')) return;
+    await clearPostsCache();
     showToast('クリアしました。フィードを再取得します…');
     await setupMainScreen();
     showScreen('swipe');

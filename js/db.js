@@ -292,8 +292,8 @@ function sortByAlgorithm(posts, authorsMap) {
 // バックアップ / リストア
 // ────────────────────────────────────────
 
-/** デバッグ用: posts キャッシュを削除してカードをリセット（スワイプ履歴は保持） */
-export async function clearPostsAndSwipes() {
+/** posts キャッシュを削除してカードをリセット（swipes/like/dismiss 履歴は保持） */
+export async function clearPostsCache() {
   const db = await openDB();
   await wrap(db.transaction('posts', 'readwrite').objectStore('posts').clear());
 }
