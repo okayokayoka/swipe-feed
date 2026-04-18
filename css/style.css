@@ -33,6 +33,8 @@
   --card-radius:    20px;
   --nav-height:     60px;
   --tab-height:     48px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-offset: calc(var(--nav-height) + var(--safe-area-bottom));
 
   /* シャドウ */
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.5);
@@ -71,13 +73,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;   /* fallback: dvh 未対応ブラウザ向け */
-  height: 100dvh;  /* dynamic viewport height（ブラウザUI考慮） */
+  height: 100%;    /* html,body の height:100% を継承 */
   max-width: 480px;
   margin: 0 auto;
   position: relative;
-  /* fixed nav の高さ分だけ下部に余白（nav が content を隠さないよう） */
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  /* fixed nav が覆わないよう、下端オフセットを CSS 変数で一元管理する */
+  padding-bottom: var(--bottom-nav-offset);
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -623,8 +624,8 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   z-index: 50;
   display: flex;
   align-items: stretch;
-  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: var(--bottom-nav-offset);
+  padding-bottom: var(--safe-area-bottom);
   background: var(--color-nav-bg);
   border-top: 1px solid var(--color-border);
   backdrop-filter: blur(12px);
@@ -898,7 +899,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .loading-overlay {
   position: absolute;
   top: 0; right: 0; left: 0;
-  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px)); /* nav は常に操作可能に保つ */
+  bottom: var(--bottom-nav-offset); /* nav は常に操作可能に保つ */
   background: var(--color-bg);
   display: flex;
   align-items: center;
@@ -928,7 +929,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
    ──────────────────────────────────────────────────────────────── */
 .toast-container {
   position: fixed;
-  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+  bottom: calc(var(--bottom-nav-offset) + 16px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 200;

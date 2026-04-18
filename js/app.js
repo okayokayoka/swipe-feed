@@ -42,6 +42,32 @@ let feeds = DEFAULT_FEEDS;
 let currentFeedId = feeds[0].id;
 let stack = null;
 let authorsMap = {};
+let _loadGeneration = 0;
+let _navSyncScheduled = false;
+
+function syncBottomNavOffset() {
+  const nav = document.querySelector('.bottom-nav');
+  if (!nav) return;
+
+  const height = Math.ceil(nav.getBoundingClientRect().height);
+  if (height > 0) {
+    document.documentElement.style.setProperty('--bottom-nav-offset', `${height}px`);
+  } else {
+    document.documentElement.style.removeProperty('--bottom-nav-offset');
+  }
+}
+
+function scheduleBottomNavOffsetSync() {
+  if (_navSyncScheduled) return;
+  _navSyncScheduled = true;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      _navSyncScheduled = false;
+      syncBottomNavOffset();
+    });
+  });
+}
 
 // ────────────────────────────────────────────────────────────────
 // 初期化
@@ -123,28 +149,30 @@ function rewriteVideoUrls(posts) {
 }
 
 async function loadFeed(feedId) {
+  const gen = ++_loadGeneration;
   showLoading(true);
 
   try {
-    // まずDBのキャッシュを表示（オフライン対応）
     let posts = await getUnreadPosts(feedId, 30);
+    if (gen !== _loadGeneration) return;
 
     if (posts.length < 5) {
-      // キャッシュが少なければAPIから取得
       posts = await fetchAndCache(feedId) ?? posts;
+      if (gen !== _loadGeneration) return;
     }
 
     authorsMap = await getAuthorsMap();
     stack.load(rewriteVideoUrls(posts), feedId);
     updateRemainingBadge();
   } catch (err) {
+    if (gen !== _loadGeneration) return;
     console.error('フィード読み込みエラー:', err);
     showToast('読み込みエラー: ' + (err?.message ?? err), 4000);
-    // キャッシュだけで続行
     const posts = await getUnreadPosts(feedId, 30);
+    if (gen !== _loadGeneration) return;
     stack.load(rewriteVideoUrls(posts), feedId);
   } finally {
-    showLoading(false);
+    if (gen === _loadGeneration) showLoading(false);
   }
 }
 
@@ -385,6 +413,8 @@ function showScreen(name) {
   if (name === 'settings') {
     renderSettings();
   }
+
+  scheduleBottomNavOffsetSync();
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -470,6 +500,17 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const nav = document.querySelector('.bottom-nav');
+  const navResizeObserver = ('ResizeObserver' in window && nav)
+    ? new ResizeObserver(() => scheduleBottomNavOffsetSync())
+    : null;
+
+  navResizeObserver?.observe(nav);
+  scheduleBottomNavOffsetSync();
+  window.addEventListener('resize', scheduleBottomNavOffsetSync);
+  window.addEventListener('pageshow', scheduleBottomNavOffsetSync);
+  window.visualViewport?.addEventListener('resize', scheduleBottomNavOffsetSync);
+
   // ナビゲーションボタン
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => showScreen(btn.dataset.screen));

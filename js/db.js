@@ -10,7 +10,7 @@
  */
 
 const DB_NAME = 'swipe-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _db = null;
 
@@ -23,12 +23,17 @@ export function openDB() {
 
     req.onupgradeneeded = (event) => {
       const db = event.target.result;
+      const oldVersion = event.oldVersion;
 
-      // posts ストア（ツイートキャッシュ）
-      if (!db.objectStoreNames.contains('posts')) {
-        const store = db.createObjectStore('posts', { keyPath: 'id' });
-        store.createIndex('feedId', 'feedId');
-        store.createIndex('createdAtMs', 'createdAtMs');
+      // v1→v2: posts の keyPath を 'id' から 'postKey'（feedId:tweetId）に変更
+      // 同一ツイートが複数フィードに出たとき上書きされるバグを修正
+      if (oldVersion < 2) {
+        if (db.objectStoreNames.contains('posts')) {
+          db.deleteObjectStore('posts');
+        }
+        const postsStore = db.createObjectStore('posts', { keyPath: 'postKey' });
+        postsStore.createIndex('feedId', 'feedId');
+        postsStore.createIndex('createdAtMs', 'createdAtMs');
       }
 
       // swipes ストア（スワイプ履歴）
@@ -113,7 +118,7 @@ export async function loadSettings() {
 export async function savePosts(tweets, feedId) {
   const store = await tx('posts', 'readwrite');
   const saves = tweets.map(tweet =>
-    wrap(store.put({ ...tweet, feedId }))
+    wrap(store.put({ ...tweet, postKey: `${feedId}:${tweet.id}`, feedId }))
   );
   return Promise.all(saves);
 }
