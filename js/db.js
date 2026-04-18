@@ -131,18 +131,19 @@ export async function savePosts(tweets, feedId) {
 export async function getUnreadPosts(feedId = null, limit = 30) {
   const db = await openDB();
 
-  // 全ポストを取得
+  // feedId 指定時はインデックスで絞り込み（全件スキャンを回避）
   const postsTx = db.transaction('posts', 'readonly').objectStore('posts');
-  const allPosts = await wrap(postsTx.getAll());
+  const allPosts = feedId
+    ? await wrap(postsTx.index('feedId').getAll(feedId))
+    : await wrap(postsTx.getAll());
 
   // スワイプ済み ID セット
   const swipesTx = db.transaction('swipes', 'readonly').objectStore('swipes');
   const allSwipes = await wrap(swipesTx.getAll());
   const swipedIds = new Set(allSwipes.map(s => s.tweetId));
 
-  // フィルタリング
+  // スワイプ済みを除外
   let posts = allPosts.filter(p => !swipedIds.has(p.id));
-  if (feedId) posts = posts.filter(p => p.feedId === feedId);
 
   // アルゴリズムでソート
   const authorsMap = await getAuthorsMap();
@@ -196,9 +197,12 @@ export async function removeBookmark(tweetId) {
  */
 export async function getBookmarks({ feedId, query, limit = 30, offset = 0 } = {}) {
   const store = await tx('bookmarks');
-  let all = await wrap(store.getAll());
+  // feedId 指定かつ全文検索なしの場合はインデックスで絞り込み
+  let all = (feedId && !query)
+    ? await wrap(store.index('feedId').getAll(feedId))
+    : await wrap(store.getAll());
 
-  if (feedId) all = all.filter(b => b.feedId === feedId);
+  if (feedId && query) all = all.filter(b => b.feedId === feedId);
   if (query) {
     const q = query.toLowerCase();
     all = all.filter(b =>
