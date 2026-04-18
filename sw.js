@@ -35,7 +35,10 @@ self.addEventListener('fetch', (event) => {
     fetch(new Request(event.request, { cache: 'no-cache' }))
       .then(resp => {
         if (resp.ok) {
-          caches.open(CACHE_NAME).then(c => c.put(event.request, resp.clone()));
+          // waitUntil で SW の終了を遅延させ、キャッシュ書き込みを確実に完了させる
+          event.waitUntil(
+            caches.open(CACHE_NAME).then(c => c.put(event.request, resp.clone()))
+          );
         }
         return resp;
       })
