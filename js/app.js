@@ -14,7 +14,7 @@ import { fetchListTimeline } from './api.js';
 import {
   openDB, loadSettings, setSetting,
   savePosts, getUnreadPosts,
-  recordSwipe, incrementAuthorLike,
+  recordSwipe, updateSwipeAction, getSwipeHistory, incrementAuthorLike,
   addBookmark, removeBookmark, getBookmarks, getBookmarkCount,
   getAuthorsMap, exportBookmarks, clearPostsCache,
 } from './db.js';
@@ -218,7 +218,7 @@ async function switchFeed(feedId) {
 // ────────────────────────────────────────────────────────────────
 async function handleLike(tweet) {
   await Promise.all([
-    recordSwipe(tweet.id, 'like'),
+    recordSwipe(tweet.id, 'like', tweet, currentFeedId),
     incrementAuthorLike(tweet.author?.handle),
   ]);
   authorsMap = await getAuthorsMap();
@@ -226,13 +226,13 @@ async function handleLike(tweet) {
 }
 
 async function handleDismiss(tweet) {
-  await recordSwipe(tweet.id, 'dismiss');
+  await recordSwipe(tweet.id, 'dismiss', tweet, currentFeedId);
   updateRemainingBadge();
 }
 
 async function handleBookmark(tweet) {
   await Promise.all([
-    recordSwipe(tweet.id, 'bookmark'),
+    recordSwipe(tweet.id, 'bookmark', tweet, currentFeedId),
     addBookmark(tweet, currentFeedId),
   ]);
   showToast('★ ブックマークに保存しました');
@@ -405,6 +405,176 @@ function bindBookmarkCardSwipe(cardEl) {
   cardEl.addEventListener('touchcancel', endHandler, { signal });
 }
 
+// ────────────────────────────────────────────────────────────────
+// 履歴画面（いいね / スキップ）
+// ────────────────────────────────────────────────────────────────
+let currentHistoryAction = 'like';
+let pendingActionItem = null;
+
+async function renderHistory(query = '') {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const items = await getSwipeHistory(currentHistoryAction, { query, limit: 100 });
+
+  if (items.length === 0) {
+    const msg = currentHistoryAction === 'like'
+      ? 'いいね履歴はまだありません'
+      : 'スキップ履歴はまだありません';
+    list.innerHTML = `<div class="bookmarks-empty">${msg}</div>`;
+    return;
+  }
+
+  items.forEach(item => {
+    const el = createHistoryItem(item);
+    list.appendChild(el);
+  });
+}
+
+function createHistoryItem(item) {
+  const el = document.createElement('div');
+  el.className = 'bookmark-item';
+  el.dataset.tweetId = item.tweetId;
+
+  const firstMedia = item.media?.[0];
+  const thumbUrl = firstMedia?.poster || firstMedia?.url;
+  const thumbHTML = thumbUrl
+    ? `<img class="bookmark-thumb" src="${escHtml(thumbUrl)}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'bookmark-thumb-placeholder\\'>📌</div>'">`
+    : `<div class="bookmark-thumb-placeholder">📌</div>`;
+
+  const relTime = relativeTime(item.swipedAt);
+  const icon = currentHistoryAction === 'like' ? '♥' : '✕';
+
+  el.innerHTML = `
+    ${thumbHTML}
+    <div class="bookmark-info">
+      <span class="bookmark-author">@${escHtml(item.author?.handle ?? '')}</span>
+      <p class="bookmark-text">${escHtml(item.text ?? '')}</p>
+      <span class="bookmark-meta">${icon} ${escHtml(item.feedId ?? '')} · ${relTime}</span>
+    </div>`;
+
+  // タップ → カードプレビュー（長押し直後は抑制）
+  el.addEventListener('click', () => {
+    if (el.dataset.longPressed === '1') {
+      delete el.dataset.longPressed;
+      return;
+    }
+    showBookmarkCard(item);
+  });
+
+  bindLongPress(el, () => showActionMenu(item));
+  return el;
+}
+
+// ────────────────────────────────────────────────────────────────
+// 長押し検出（500ms 保持 + 10px 以上動いたらキャンセル）
+// ────────────────────────────────────────────────────────────────
+function bindLongPress(el, callback, { duration = 500, tolerance = 10 } = {}) {
+  let timer = null;
+  let startX = 0, startY = 0;
+
+  const clear = () => { clearTimeout(timer); timer = null; };
+
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      el.dataset.longPressed = '1';
+      if (navigator.vibrate) navigator.vibrate(20);
+      callback();
+      // touchend 後の合成clickを抑制したら自動でフラグを消す（残留防止）
+      setTimeout(() => { delete el.dataset.longPressed; }, 600);
+    }, duration);
+  }, { passive: true });
+
+  el.addEventListener('touchmove', (e) => {
+    if (!timer) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - startX) > tolerance || Math.abs(t.clientY - startY) > tolerance) {
+      clear();
+    }
+  }, { passive: true });
+
+  el.addEventListener('touchend', clear);
+  el.addEventListener('touchcancel', clear);
+
+  // デスクトップ用：右クリックで代用
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    callback();
+  });
+}
+
+// ────────────────────────────────────────────────────────────────
+// 長押しアクションメニュー
+// ────────────────────────────────────────────────────────────────
+function showActionMenu(item) {
+  pendingActionItem = item;
+  const menu = document.getElementById('history-action-menu');
+  if (!menu) return;
+
+  // like 履歴では「いいねに移動」は不要なので隠す
+  const moveLikeBtn = menu.querySelector('[data-act="move-like"]');
+  if (moveLikeBtn) {
+    moveLikeBtn.style.display = (currentHistoryAction === 'like') ? 'none' : '';
+  }
+  menu.classList.remove('hidden');
+}
+
+function hideActionMenu() {
+  pendingActionItem = null;
+  document.getElementById('history-action-menu')?.classList.add('hidden');
+}
+
+async function executeAction(act) {
+  const item = pendingActionItem;
+  hideActionMenu();
+  if (!item) return;
+
+  if (act === 'move-like') {
+    await updateSwipeAction(item.tweetId, 'like');
+    await incrementAuthorLike(item.author?.handle);
+    authorsMap = await getAuthorsMap();
+    showToast('♥ いいねに移動しました');
+  } else if (act === 'add-bookmark') {
+    // tweet 形式に変換して bookmarks ストアに登録
+    const tweetLike = {
+      id: item.tweetId,
+      author: item.author,
+      text: item.text,
+      media: item.media,
+      quotedTweet: item.quotedTweet,
+      link: item.link,
+      createdAt: item.createdAt,
+    };
+    await Promise.all([
+      updateSwipeAction(item.tweetId, 'bookmark'),
+      addBookmark(tweetLike, item.feedId ?? ''),
+    ]);
+    showToast('★ ブックマークに追加しました');
+  } else {
+    return;
+  }
+
+  // 現在の履歴リストを再レンダリング（移動後は消えるはず）
+  const query = document.getElementById('history-search')?.value ?? '';
+  renderHistory(query);
+}
+
+function showHistoryScreen(action) {
+  currentHistoryAction = action;
+  const title = action === 'like' ? '♥ いいね履歴' : '✕ スキップ履歴';
+  const titleEl = document.getElementById('history-title');
+  if (titleEl) titleEl.textContent = title;
+  const searchEl = document.getElementById('history-search');
+  if (searchEl) searchEl.value = '';
+  showScreen('history');
+}
+
 function relativeTime(ts) {
   const ms = Date.now() - ts;
   const s = ms / 1000;
@@ -494,6 +664,10 @@ function showScreen(name) {
   }
   if (name === 'settings') {
     renderSettings();
+  }
+  if (name === 'history') {
+    const query = document.getElementById('history-search')?.value ?? '';
+    renderHistory(query);
   }
 
   scheduleBottomNavOffsetSync();
@@ -611,6 +785,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // カードプレビューモーダルを閉じる
   document.getElementById('card-preview-close')?.addEventListener('click', hideBookmarkCard);
   document.querySelector('.card-preview-backdrop')?.addEventListener('click', hideBookmarkCard);
+
+  // 履歴画面遷移
+  document.getElementById('btn-show-likes')?.addEventListener('click', () => showHistoryScreen('like'));
+  document.getElementById('btn-show-dismissed')?.addEventListener('click', () => showHistoryScreen('dismiss'));
+  document.getElementById('btn-history-back')?.addEventListener('click', () => showScreen('settings'));
+  document.getElementById('history-search')?.addEventListener('input', (e) => {
+    renderHistory(e.target.value);
+  });
+
+  // 長押しアクションメニュー
+  document.querySelectorAll('#history-action-menu .history-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => executeAction(btn.dataset.act));
+  });
+  document.querySelector('.history-action-backdrop')?.addEventListener('click', hideActionMenu);
 
   // 設定の保存
   document.getElementById('btn-save-settings')?.addEventListener('click', saveSettings);

@@ -156,15 +156,63 @@ export async function getUnreadPosts(feedId = null, limit = 30) {
 // Swipes（スワイプ記録）
 // ────────────────────────────────────────
 
-export async function recordSwipe(tweetId, action) {
+/**
+ * スワイプを記録。tweetData + feedId を渡すと履歴表示用にツイート全情報も保存する。
+ */
+export async function recordSwipe(tweetId, action, tweetData = null, feedId = null) {
   const store = await tx('swipes', 'readwrite');
-  return wrap(store.put({ tweetId, action, swipedAt: Date.now() }));
+  const entry = { tweetId, action, swipedAt: Date.now() };
+  if (tweetData && feedId) {
+    entry.feedId = feedId;
+    entry.author = tweetData.author;
+    entry.text = tweetData.text;
+    entry.media = tweetData.media;
+    entry.quotedTweet = tweetData.quotedTweet;
+    entry.link = tweetData.link;
+    entry.createdAt = tweetData.createdAt;
+  }
+  return wrap(store.put(entry));
 }
 
 export async function hasSwipped(tweetId) {
   const store = await tx('swipes');
   const record = await wrap(store.get(tweetId));
   return !!record;
+}
+
+/**
+ * 指定 action のスワイプ履歴（ツイートデータ付きのみ）を新しい順で取得
+ * @param {'like'|'dismiss'|'bookmark'} action
+ * @param {{ query?: string, limit?: number, offset?: number }}
+ */
+export async function getSwipeHistory(action, { query, limit = 100, offset = 0 } = {}) {
+  const store = await tx('swipes');
+  let all = await wrap(store.index('action').getAll(action));
+
+  // ツイートデータのあるエントリだけ（旧仕様のレコードは除外）
+  all = all.filter(e => e.author || e.text || e.media);
+
+  if (query) {
+    const q = query.toLowerCase();
+    all = all.filter(e =>
+      e.text?.toLowerCase().includes(q) ||
+      e.author?.handle?.toLowerCase().includes(q) ||
+      e.author?.name?.toLowerCase().includes(q)
+    );
+  }
+
+  all.sort((a, b) => b.swipedAt - a.swipedAt);
+  return all.slice(offset, offset + limit);
+}
+
+/** swipe の action を更新（長押しで like↔dismiss↔bookmark 間を移動する用） */
+export async function updateSwipeAction(tweetId, newAction) {
+  const store = await tx('swipes', 'readwrite');
+  const entry = await wrap(store.get(tweetId));
+  if (!entry) return null;
+  entry.action = newAction;
+  entry.swipedAt = Date.now();
+  return wrap(store.put(entry));
 }
 
 // ────────────────────────────────────────

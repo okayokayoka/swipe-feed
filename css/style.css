@@ -1028,6 +1028,83 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
    ダークモード（常時ダーク設計なので@media不要だが、OS設定でライトモードの場合の保険）
    ──────────────────────────────────────────────────────────────── */
 /* ────────────────────────────────────────────────────────────────
+   履歴画面（いいね / スキップ）
+   ──────────────────────────────────────────────────────────────── */
+.history-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.history-back-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--color-text-2);
+  font-size: 15px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.history-back-btn:active {
+  color: var(--color-text);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   長押しアクションメニュー（bottom sheet）
+   ──────────────────────────────────────────────────────────────── */
+.history-action-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.history-action-menu.hidden {
+  display: none;
+}
+.history-action-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+}
+.history-action-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  border-radius: 16px 16px 0 0;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: sheet-slide-up 0.2s ease-out;
+}
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.history-action-btn {
+  padding: 15px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  border-radius: 10px;
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+  text-align: center;
+}
+.history-action-btn:active {
+  background: var(--color-border);
+}
+.history-action-cancel {
+  background: transparent;
+  color: var(--color-text-2);
+  margin-top: 4px;
+}
+
+/* ────────────────────────────────────────────────────────────────
    カードプレビューモーダル（ブックマーク一覧からのカード表示）
    ──────────────────────────────────────────────────────────────── */
 .card-preview-modal {

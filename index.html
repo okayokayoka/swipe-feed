@@ -142,6 +142,14 @@
         <button id="btn-add-feed" class="settings-btn">+ フィードを追加</button>
       </div>
 
+      <!-- 履歴 -->
+      <div class="settings-section">
+        <p class="settings-section-title">履歴</p>
+        <button id="btn-show-likes" class="settings-btn">♥ いいね履歴</button>
+        <button id="btn-show-dismissed" class="settings-btn">✕ スキップ履歴</button>
+        <p class="settings-hint">タップでカードを表示、長押しで他のリストへ移動できます</p>
+      </div>
+
       <!-- データ -->
       <div class="settings-section">
         <p class="settings-section-title">データ</p>
@@ -155,6 +163,25 @@
         <button id="btn-save-settings" class="settings-btn settings-btn-primary">保存して再起動</button>
       </div>
 
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         履歴画面（いいね / スキップ）
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-history" class="screen">
+      <div class="bookmarks-header history-header">
+        <button id="btn-history-back" class="history-back-btn" aria-label="設定に戻る">← 戻る</button>
+        <h1 class="bookmarks-title" id="history-title">履歴</h1>
+        <input
+          id="history-search"
+          class="search-input"
+          type="search"
+          placeholder="検索..."
+          aria-label="履歴検索"
+          inputmode="search"
+        >
+      </div>
+      <div id="history-list" class="bookmarks-list" role="list"></div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════
@@ -259,6 +286,16 @@
 
     <!-- トースト通知 -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- 履歴アイテム長押しアクションメニュー -->
+    <div id="history-action-menu" class="history-action-menu hidden" role="dialog" aria-modal="true" aria-label="アクション選択">
+      <div class="history-action-backdrop"></div>
+      <div class="history-action-sheet">
+        <button class="history-action-btn" data-act="move-like">♥ いいねに移動</button>
+        <button class="history-action-btn" data-act="add-bookmark">★ ブックマークに追加</button>
+        <button class="history-action-btn history-action-cancel" data-act="cancel">キャンセル</button>
+      </div>
+    </div>
 
     <!-- カードプレビューモーダル（ブックマークタップ時） -->
     <div id="card-preview-modal" class="card-preview-modal hidden" role="dialog" aria-modal="true" aria-label="カードプレビュー">
