@@ -569,9 +569,14 @@ export class CardStack {
     topWrapper.addEventListener('lostpointercapture', (e) => _dbgLog('lostpointercapture', { id: e.pointerId }));
 
     // 画像タップでビューアーを開く（click はポインターキャプチャの影響を受けない）
+    // ただし横スクロール内はスワイプ意図を優先し、少しでも動いたら開かない。
     topWrapper.querySelectorAll('.card-image-single img, .card-image-scroll img').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
+        const threshold = img.closest('.card-image-scroll') ? 5 : 12;
+        if (Math.abs(this._curX || 0) > threshold || Math.abs(this._curY || 0) > threshold) {
+          return; // スワイプ意図と判断してビューア開かない
+        }
         openImageViewer(img.src);
       });
     });
@@ -714,13 +719,19 @@ export class CardStack {
     const wrapper = e.currentTarget;
 
     // 画像タップ: ビューアーを開く
-    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
-      const t = this._startTarget;
-      _dbgLog('tap-check', { startTag: t?.tagName, inImgContainer: !!(t?.closest('.card-image-single, .card-image-scroll')) });
-      if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
-        this._returnCard(wrapper);
-        openImageViewer(t.src);
-        return;
+    // 横スクロール内はスワイプ意図を優先して閾値を厳しく（5px）
+    const t = this._startTarget;
+    if (t?.tagName === 'IMG') {
+      const inScroll = t.closest('.card-image-scroll');
+      const inSingle = t.closest('.card-image-single');
+      if (inScroll || inSingle) {
+        const tapThreshold = inScroll ? 5 : 12;
+        _dbgLog('tap-check', { startTag: t.tagName, inScroll: !!inScroll, inSingle: !!inSingle, threshold: tapThreshold });
+        if (Math.abs(dx) < tapThreshold && Math.abs(dy) < tapThreshold) {
+          this._returnCard(wrapper);
+          openImageViewer(t.src);
+          return;
+        }
       }
     }
 
@@ -749,10 +760,11 @@ export class CardStack {
 
     // iOS は画像タッチを pointercancel でキャンセルすることがある。
     // 移動量が小さければタップとして扱う。
+    // ただし横スクロール内のキャンセルは「スクロール開始」の可能性が高いので開かない。
     if (Math.abs(this._curX) < 15 && Math.abs(this._curY) < 15) {
       const t = this._startTarget;
-      _dbgLog('cancel-tap-check', { startTag: t?.tagName, inImgContainer: !!(t?.closest('.card-image-single, .card-image-scroll')) });
-      if (t?.tagName === 'IMG' && t.closest('.card-image-single, .card-image-scroll')) {
+      _dbgLog('cancel-tap-check', { startTag: t?.tagName, inSingle: !!(t?.closest('.card-image-single')), inScroll: !!(t?.closest('.card-image-scroll')) });
+      if (t?.tagName === 'IMG' && t.closest('.card-image-single')) {
         this._returnCard(e.currentTarget);
         openImageViewer(t.src);
         return;
