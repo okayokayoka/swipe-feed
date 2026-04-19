@@ -83,13 +83,13 @@ async function init() {
 
   // auth_token 未設定ならセットアップ画面を表示
   if (!settings.authToken || !settings.ct0 || !settings.workerUrl) {
-    showScreen('setup');
+    showScreen('setup', { replace: true });
     return;
   }
 
   // メイン画面を初期化
   await setupMainScreen();
-  showScreen('swipe');
+  showScreen('swipe', { replace: true });
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -340,12 +340,20 @@ function showBookmarkCard(item) {
 
   const cardEl = content.querySelector('.card');
   if (cardEl) bindBookmarkCardSwipe(cardEl);
+
+  pushModalHistory('card-preview', hideBookmarkCardInternal);
 }
 
-function hideBookmarkCard() {
+// DOMだけ閉じる（popstate 経由で呼ばれる）
+function hideBookmarkCardInternal() {
   _bookmarkSwipeController?.abort();
   _bookmarkSwipeController = null;
   document.getElementById('card-preview-modal')?.classList.add('hidden');
+}
+
+// ユーザー操作のクローズ（history.back 経由で popstate に任せる）
+function hideBookmarkCard() {
+  dismissModal('card-preview');
 }
 
 // カードをスワイプすると閉じる
@@ -523,11 +531,19 @@ function showActionMenu(item) {
     moveLikeBtn.style.display = (currentHistoryAction === 'like') ? 'none' : '';
   }
   menu.classList.remove('hidden');
+
+  pushModalHistory('action-menu', hideActionMenuInternal);
 }
 
-function hideActionMenu() {
+// DOMだけ閉じる（popstate 経由で呼ばれる）
+function hideActionMenuInternal() {
   pendingActionItem = null;
   document.getElementById('history-action-menu')?.classList.add('hidden');
+}
+
+// ユーザー操作のクローズ
+function hideActionMenu() {
+  dismissModal('action-menu');
 }
 
 async function executeAction(act) {
@@ -645,13 +661,39 @@ async function saveSettings() {
 
   // 再初期化
   await setupMainScreen();
-  showScreen('swipe');
+  showScreen('swipe', { replace: true });
 }
 
 // ────────────────────────────────────────────────────────────────
-// 画面切替
+// 画面切替 & 戻る操作対応（History API）
+//
+// 階層:  swipe（根）→ bookmarks / settings → history
+//   - showScreen() はデフォルトで pushState（戻るで前画面に戻れる）
+//   - replace=true で replaceState（setup完了 / 保存後のリセット用）
+//   - モーダル開閉も履歴に載せ、戻るでモーダルだけ閉じる
 // ────────────────────────────────────────────────────────────────
-function showScreen(name) {
+let _poppingState = false;
+const _modalStack = [];  // [{ name, close: fn }]
+
+function showScreen(name, { replace = false } = {}) {
+  if (_poppingState) {
+    showScreenInternal(name);
+    return;
+  }
+  // すでに同画面ならUIだけ更新（データ再読込のため）
+  if (history.state?.screen === name && !history.state?.modal) {
+    showScreenInternal(name);
+    return;
+  }
+  if (replace) {
+    history.replaceState({ screen: name }, '');
+  } else {
+    history.pushState({ screen: name }, '');
+  }
+  showScreenInternal(name);
+}
+
+function showScreenInternal(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(`screen-${name}`)?.classList.add('active');
 
@@ -671,6 +713,27 @@ function showScreen(name) {
   }
 
   scheduleBottomNavOffsetSync();
+}
+
+// モーダルを履歴に積む（戻るで閉じられるように）
+function pushModalHistory(name, closeFn) {
+  _modalStack.push({ name, close: closeFn });
+  history.pushState({ ...history.state, modal: name }, '');
+}
+
+// ユーザー操作でモーダルを閉じる（history.back() 経由で popstate に任せる）
+function dismissModal(name) {
+  const top = _modalStack[_modalStack.length - 1];
+  if (top?.name === name) {
+    history.back();
+    return;
+  }
+  // フォールバック：スタック中段にあるケース（通常発生しない）
+  const idx = _modalStack.findIndex(m => m.name === name);
+  if (idx >= 0) {
+    const [m] = _modalStack.splice(idx, 1);
+    m.close();
+  }
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -767,6 +830,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('pageshow', scheduleBottomNavOffsetSync);
   window.visualViewport?.addEventListener('resize', scheduleBottomNavOffsetSync);
 
+  // 戻るボタン（Android ジェスチャー含む）対応
+  history.replaceState({ screen: 'swipe' }, '');
+  window.addEventListener('popstate', (e) => {
+    _poppingState = true;
+    try {
+      // モーダル優先でクローズ
+      if (_modalStack.length > 0) {
+        const m = _modalStack.pop();
+        m.close();
+        return;
+      }
+      // 画面遷移
+      const screen = e.state?.screen ?? 'swipe';
+      showScreenInternal(screen);
+    } finally {
+      _poppingState = false;
+    }
+  });
+
   // ナビゲーションボタン
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => showScreen(btn.dataset.screen));
@@ -789,7 +871,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 履歴画面遷移
   document.getElementById('btn-show-likes')?.addEventListener('click', () => showHistoryScreen('like'));
   document.getElementById('btn-show-dismissed')?.addEventListener('click', () => showHistoryScreen('dismiss'));
-  document.getElementById('btn-history-back')?.addEventListener('click', () => showScreen('settings'));
+  document.getElementById('btn-history-back')?.addEventListener('click', () => history.back());
   document.getElementById('history-search')?.addEventListener('input', (e) => {
     renderHistory(e.target.value);
   });
@@ -815,7 +897,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await clearPostsCache();
     showToast('クリアしました。フィードを再取得します…');
     await setupMainScreen();
-    showScreen('swipe');
+    showScreen('swipe', { replace: true });
   });
 
   // デバッグ: Service Worker キャッシュをクリア
@@ -861,7 +943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     settings.workerUrl   = workerUrl;
     settings.proxySecret = proxySecret;
     await setupMainScreen();
-    showScreen('swipe');
+    showScreen('swipe', { replace: true });
   });
 
   // バックグラウンドスワイプでフィード切替
