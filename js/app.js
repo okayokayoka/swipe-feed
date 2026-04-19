@@ -24,14 +24,14 @@ import { CardStack, triggerSwipeAction, buildCardHTML } from './swipe.js';
 // デフォルトフィード設定
 // ────────────────────────────────────────────────────────────────
 const DEFAULT_FEEDS = [
-  { id: 'tech',    name: 'Tech',    listId: '2039195389270913259', includeRetweets: true },
-  { id: 'games',   name: 'Games',   listId: '2039204263470285206', includeRetweets: true },
-  { id: 'toys',    name: 'Toys',    listId: '2039202935536832833', includeRetweets: true },
-  { id: 'gadgets', name: 'Gadgets', listId: '2039204038647103800', includeRetweets: true },
-  { id: 'books',   name: 'Books',   listId: '2039206851309609264', includeRetweets: true },
-  { id: 'foods',   name: 'Foods',   listId: '2039221154691653645', includeRetweets: true },
-  { id: 'friends', name: 'Friends', listId: '2039207895963992261', includeRetweets: true },
-  { id: 'etc',     name: 'Etc',     listId: '1783369589369499680', includeRetweets: true },
+  { id: 'tech',    name: 'Tech',    listId: '2039195389270913259', includeRetweets: true, mediaOnly: false },
+  { id: 'games',   name: 'Games',   listId: '2039204263470285206', includeRetweets: true, mediaOnly: false },
+  { id: 'toys',    name: 'Toys',    listId: '2039202935536832833', includeRetweets: true, mediaOnly: false },
+  { id: 'gadgets', name: 'Gadgets', listId: '2039204038647103800', includeRetweets: true, mediaOnly: false },
+  { id: 'books',   name: 'Books',   listId: '2039206851309609264', includeRetweets: true, mediaOnly: false },
+  { id: 'foods',   name: 'Foods',   listId: '2039221154691653645', includeRetweets: true, mediaOnly: false },
+  { id: 'friends', name: 'Friends', listId: '2039207895963992261', includeRetweets: true, mediaOnly: false },
+  { id: 'etc',     name: 'Etc',     listId: '1783369589369499680', includeRetweets: true, mediaOnly: false },
 ];
 
 // ────────────────────────────────────────────────────────────────
@@ -42,6 +42,7 @@ let feeds = DEFAULT_FEEDS;
 let currentFeedId = feeds[0].id;
 let stack = null;
 let authorsMap = {};
+let blockedAuthors = []; // 小文字 handle の配列。グローバルブロックリスト
 let _loadGeneration = 0;
 let _navSyncScheduled = false;
 
@@ -79,6 +80,11 @@ async function init() {
   // 設定からフィード一覧を復元
   if (settings.feeds) {
     try { feeds = JSON.parse(settings.feeds); } catch { /* デフォルト使用 */ }
+  }
+
+  // ブロック著者リストを復元
+  if (Array.isArray(settings.blockedAuthors)) {
+    blockedAuthors = settings.blockedAuthors.filter(h => typeof h === 'string');
   }
 
   // auth_token 未設定ならセットアップ画面を表示
@@ -130,16 +136,55 @@ function buildStack() {
 // ────────────────────────────────────────────────────────────────
 // 動画URLをWorkerプロキシ経由に書き換える（キャッシュ済み直接URLの救済含む）
 // ────────────────────────────────────────────────────────────────
-// フィード設定に応じて投稿をフィルタ（現状: RT 除外オプション）
+// フィード設定・ブロックリストに応じて投稿をフィルタ
 function applyFeedFilters(posts, feedId) {
   const feed = feeds.find(f => f.id === feedId);
-  // includeRetweets が明示的に false の時だけ RT を除外。
-  // undefined は従来通り RT を含める（既存フィードの互換）。
-  if (feed && feed.includeRetweets === false) {
-    return posts.filter(p => !p.isRetweet);
-  }
-  return posts;
+  return posts.filter(p => {
+    // RT 除外（includeRetweets が明示的に false）
+    if (feed?.includeRetweets === false && p.isRetweet) return false;
+
+    // メディアのみモード（mediaOnly が明示的に true）
+    if (feed?.mediaOnly === true) {
+      if (!p.media || p.media.length === 0) return false;
+    }
+
+    // 著者ブロック（グローバル）
+    const handle = (p.author?.handle || '').toLowerCase();
+    if (handle && blockedAuthors.includes(handle)) return false;
+
+    return true;
+  });
 }
+
+// ────────────────────────────────────────────────────────────────
+// 著者ブロック管理
+// ────────────────────────────────────────────────────────────────
+async function blockAuthor(rawHandle) {
+  const handle = String(rawHandle || '').toLowerCase().trim();
+  if (!handle) return false;
+  if (blockedAuthors.includes(handle)) {
+    showToast(`@${handle} は既にブロック済みです`);
+    return false;
+  }
+  blockedAuthors.push(handle);
+  await setSetting('blockedAuthors', blockedAuthors);
+  showToast(`@${handle} をブロックしました`);
+  if (stack) await loadFeed(currentFeedId);
+  return true;
+}
+
+async function unblockAuthor(rawHandle) {
+  const handle = String(rawHandle || '').toLowerCase().trim();
+  const idx = blockedAuthors.indexOf(handle);
+  if (idx < 0) return false;
+  blockedAuthors.splice(idx, 1);
+  await setSetting('blockedAuthors', blockedAuthors);
+  showToast(`@${handle} のブロックを解除しました`);
+  return true;
+}
+
+// swipe.js 等の他モジュールから呼べるよう window に公開
+window.__filterApi = { blockAuthor, unblockAuthor };
 
 function rewriteVideoUrls(posts) {
   const { workerUrl, proxySecret } = settings;
@@ -628,6 +673,29 @@ function renderSettings() {
   document.getElementById('setting-proxy-secret').value = settings.proxySecret ?? '';
 
   renderFeedList();
+  renderBlockedAuthors();
+}
+
+function renderBlockedAuthors() {
+  const container = document.getElementById('blocked-author-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (blockedAuthors.length === 0) {
+    container.innerHTML = `<div class="blocked-empty">ブロック中の著者はいません</div>`;
+    return;
+  }
+
+  blockedAuthors.forEach(handle => {
+    const chip = document.createElement('span');
+    chip.className = 'blocked-chip';
+    chip.innerHTML = `<span class="blocked-chip-handle">@${escHtml(handle)}</span><button class="blocked-chip-remove" aria-label="解除">×</button>`;
+    chip.querySelector('.blocked-chip-remove').addEventListener('click', async () => {
+      await unblockAuthor(handle);
+      renderBlockedAuthors();
+    });
+    container.appendChild(chip);
+  });
 }
 
 function renderFeedList() {
@@ -638,26 +706,43 @@ function renderFeedList() {
     item.className = 'feed-list-item';
     // includeRetweets が undefined の場合は true 扱い（既存フィードの互換）
     const rtChecked = feed.includeRetweets !== false;
+    const mediaOnlyChecked = feed.mediaOnly === true;
     item.innerHTML = `
       <div class="feed-list-item-info">
         <span class="feed-list-item-name">${escHtml(feed.name)}</span>
         <span class="feed-list-item-id">${escHtml(feed.listId)}</span>
       </div>
-      <label class="feed-list-item-rt">
-        <input type="checkbox" ${rtChecked ? 'checked' : ''} aria-label="RTを含める">
-        <span>RT</span>
-      </label>
+      <div class="feed-list-item-toggles">
+        <label class="feed-list-item-toggle">
+          <input type="checkbox" data-kind="rt" ${rtChecked ? 'checked' : ''} aria-label="RTを含める">
+          <span>RT</span>
+        </label>
+        <label class="feed-list-item-toggle">
+          <input type="checkbox" data-kind="media-only" ${mediaOnlyChecked ? 'checked' : ''} aria-label="メディアのみ">
+          <span>画像のみ</span>
+        </label>
+      </div>
       <span class="feed-list-item-remove" aria-label="削除">×</span>`;
 
-    // RT トグル: 変更時に即保存し、現在表示中のフィードなら再読込
-    const rtInput = item.querySelector('.feed-list-item-rt input');
-    rtInput.addEventListener('change', async () => {
-      feeds[i].includeRetweets = rtInput.checked;
+    // 共通ハンドラ：トグル変更時に即保存＋カレントフィード再読込
+    const onToggle = async (msg) => {
       await setSetting('feeds', JSON.stringify(feeds));
       if (feeds[i].id === currentFeedId && stack) {
         await loadFeed(currentFeedId);
       }
-      showToast(rtInput.checked ? `${feed.name}: RT含める` : `${feed.name}: RT除外`);
+      showToast(msg);
+    };
+
+    const rtInput = item.querySelector('input[data-kind="rt"]');
+    rtInput.addEventListener('change', async () => {
+      feeds[i].includeRetweets = rtInput.checked;
+      await onToggle(rtInput.checked ? `${feed.name}: RT含める` : `${feed.name}: RT除外`);
+    });
+
+    const mediaInput = item.querySelector('input[data-kind="media-only"]');
+    mediaInput.addEventListener('change', async () => {
+      feeds[i].mediaOnly = mediaInput.checked;
+      await onToggle(mediaInput.checked ? `${feed.name}: 画像/動画のみ` : `${feed.name}: 全投稿表示`);
     });
 
     item.querySelector('.feed-list-item-remove').addEventListener('click', () => {
@@ -952,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const listId = prompt('X リスト ID (数字)');
     if (!listId) return;
     const id = name.toLowerCase().replace(/\s+/g, '-');
-    feeds.push({ id, name, listId, includeRetweets: true });
+    feeds.push({ id, name, listId, includeRetweets: true, mediaOnly: false });
     renderFeedList();
   });
 

@@ -571,30 +571,44 @@ export class CardStack {
     const tweet = this._tweets.find(t => t.id === tweetId);
     if (!tweet) return;
 
+    const handle = tweet.author?.handle || '';
     const menu = document.createElement('div');
     menu.className = 'card-context-menu';
     menu.innerHTML = `
       <ul>
         <li data-action="open-tweet">元のツイートを開く ↗</li>
+        ${handle ? `<li data-action="block-author" class="card-context-menu-danger">この著者をブロック (@${escHtml(handle)})</li>` : ''}
       </ul>`;
 
     wrapper.appendChild(menu);
     requestAnimationFrame(() => menu.classList.add('visible'));
 
+    const closeMenu = () => {
+      menu.classList.remove('visible');
+      setTimeout(() => menu.remove(), 150);
+    };
+
     // メニュー外タップで閉じる
-    const close = (e) => {
+    const outsideClose = (e) => {
       if (!menu.contains(e.target)) {
-        menu.classList.remove('visible');
-        setTimeout(() => menu.remove(), 150);
-        document.removeEventListener('pointerdown', close);
+        closeMenu();
+        document.removeEventListener('pointerdown', outsideClose);
       }
     };
-    setTimeout(() => document.addEventListener('pointerdown', close), 0);
+    setTimeout(() => document.addEventListener('pointerdown', outsideClose), 0);
 
     menu.querySelector('[data-action="open-tweet"]').addEventListener('click', () => {
       window.open(tweet.link, '_blank', 'noopener');
-      menu.classList.remove('visible');
-      setTimeout(() => menu.remove(), 150);
+      closeMenu();
+    });
+
+    menu.querySelector('[data-action="block-author"]')?.addEventListener('click', () => {
+      closeMenu();
+      document.removeEventListener('pointerdown', outsideClose);
+      // 確認ダイアログ（誤タップ防止）
+      const ok = confirm(`@${handle} をブロックしますか？\n解除は設定画面のブロック著者一覧から行えます。`);
+      if (!ok) return;
+      window.__filterApi?.blockAuthor(handle);
     });
   }
 
