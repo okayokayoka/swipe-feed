@@ -178,21 +178,25 @@ function extractTweets(response) {
       const legacy = result.legacy;
       if (!userLegacy || !legacy) continue;
 
+      // RT判定: retweeted_status_result の有無で判定する。
+      // X API の挙動変更により legacy.full_text に "RT @" 接頭辞が付かなくなる
+      // ケースがあるため、テキスト接頭辞ではなく構造で判定する。
+      // パスも legacy.retweeted_status_result / result.retweeted_status_result
+      // の両方を許容（API バージョンにより場所が変わる）。
+      const rt = legacy?.retweeted_status_result ?? result.retweeted_status_result;
+      const isRetweet = Boolean(rt);
+
       // リプライはスキップ（@で始まり、RTではない）
       const text = legacy.full_text || '';
-      if (text.startsWith('@') && !text.startsWith('RT @')) continue;
-
-      const isRetweet = text.startsWith('RT @');
+      if (!isRetweet && text.startsWith('@')) continue;
 
       // RTの場合: 元ツイートの result / userLegacy / legacy に差し替える
-      // retweeted_status_result に元ツイートのフルデータが入っている
       let srcResult    = result;
       let srcUserLeg   = userLegacy;
       let srcLegacy    = legacy;
       let retweetedBy  = null;
 
       if (isRetweet) {
-        const rt = result.retweeted_status_result;
         // パターン1: rt.result が Tweet/TweetWithVisibilityResults
         // パターン2: rt 自体が TweetWithVisibilityResults（.result なし）
         let rtResult = rt?.result ?? rt;
@@ -204,6 +208,14 @@ function extractTweets(response) {
           srcResult   = rtResult;
           srcUserLeg  = rtUser;
           srcLegacy   = rtLegacy;
+        } else {
+          console.warn('[api.js] RT検出したが元ツイート抽出に失敗:', {
+            tweetId: result.rest_id,
+            rtKeys: rt ? Object.keys(rt) : null,
+            rtResultTypename: rtResult?.__typename,
+            hasRtUser: !!rtUser,
+            hasRtLegacy: !!rtLegacy,
+          });
         }
       }
 
