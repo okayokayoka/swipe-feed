@@ -874,8 +874,14 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   border-radius: 12px;
   padding: 10px 12px;
 }
-.feed-list-item-name {
+.feed-list-item-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.feed-list-item-name {
   font-size: 14px;
   font-weight: 500;
 }
@@ -883,6 +889,26 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--color-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-list-item-rt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.feed-list-item-rt input {
+  accent-color: var(--color-like);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
 }
 .feed-list-item-remove {
   font-size: 18px;

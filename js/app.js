@@ -24,14 +24,14 @@ import { CardStack, triggerSwipeAction, buildCardHTML } from './swipe.js';
 // デフォルトフィード設定
 // ────────────────────────────────────────────────────────────────
 const DEFAULT_FEEDS = [
-  { id: 'tech',    name: 'Tech',    listId: '2039195389270913259' },
-  { id: 'games',   name: 'Games',   listId: '2039204263470285206' },
-  { id: 'toys',    name: 'Toys',    listId: '2039202935536832833' },
-  { id: 'gadgets', name: 'Gadgets', listId: '2039204038647103800' },
-  { id: 'books',   name: 'Books',   listId: '2039206851309609264' },
-  { id: 'foods',   name: 'Foods',   listId: '2039221154691653645' },
-  { id: 'friends', name: 'Friends', listId: '2039207895963992261' },
-  { id: 'etc',     name: 'Etc',     listId: '1783369589369499680' },
+  { id: 'tech',    name: 'Tech',    listId: '2039195389270913259', includeRetweets: true },
+  { id: 'games',   name: 'Games',   listId: '2039204263470285206', includeRetweets: true },
+  { id: 'toys',    name: 'Toys',    listId: '2039202935536832833', includeRetweets: true },
+  { id: 'gadgets', name: 'Gadgets', listId: '2039204038647103800', includeRetweets: true },
+  { id: 'books',   name: 'Books',   listId: '2039206851309609264', includeRetweets: true },
+  { id: 'foods',   name: 'Foods',   listId: '2039221154691653645', includeRetweets: true },
+  { id: 'friends', name: 'Friends', listId: '2039207895963992261', includeRetweets: true },
+  { id: 'etc',     name: 'Etc',     listId: '1783369589369499680', includeRetweets: true },
 ];
 
 // ────────────────────────────────────────────────────────────────
@@ -130,6 +130,17 @@ function buildStack() {
 // ────────────────────────────────────────────────────────────────
 // 動画URLをWorkerプロキシ経由に書き換える（キャッシュ済み直接URLの救済含む）
 // ────────────────────────────────────────────────────────────────
+// フィード設定に応じて投稿をフィルタ（現状: RT 除外オプション）
+function applyFeedFilters(posts, feedId) {
+  const feed = feeds.find(f => f.id === feedId);
+  // includeRetweets が明示的に false の時だけ RT を除外。
+  // undefined は従来通り RT を含める（既存フィードの互換）。
+  if (feed && feed.includeRetweets === false) {
+    return posts.filter(p => !p.isRetweet);
+  }
+  return posts;
+}
+
 function rewriteVideoUrls(posts) {
   const { workerUrl, proxySecret } = settings;
   if (!workerUrl) return posts;
@@ -162,7 +173,7 @@ async function loadFeed(feedId) {
     }
 
     authorsMap = await getAuthorsMap();
-    stack.load(rewriteVideoUrls(posts), feedId);
+    stack.load(rewriteVideoUrls(applyFeedFilters(posts, feedId)), feedId);
     updateRemainingBadge();
   } catch (err) {
     if (gen !== _loadGeneration) return;
@@ -170,7 +181,7 @@ async function loadFeed(feedId) {
     showToast('読み込みエラー: ' + (err?.message ?? err), 4000);
     const posts = await getUnreadPosts(feedId, 30);
     if (gen !== _loadGeneration) return;
-    stack.load(rewriteVideoUrls(posts), feedId);
+    stack.load(rewriteVideoUrls(applyFeedFilters(posts, feedId)), feedId);
   } finally {
     if (gen === _loadGeneration) showLoading(false);
   }
@@ -249,7 +260,7 @@ async function handleEmpty() {
     const posts = await fetchAndCache(currentFeedId);
     if (posts && posts.length > 0) {
       authorsMap = await getAuthorsMap();
-      stack.load(rewriteVideoUrls(posts), currentFeedId);
+      stack.load(rewriteVideoUrls(applyFeedFilters(posts, currentFeedId)), currentFeedId);
     }
   } catch (err) {
     console.error('追加読み込みエラー:', err);
@@ -625,10 +636,30 @@ function renderFeedList() {
   feeds.forEach((feed, i) => {
     const item = document.createElement('div');
     item.className = 'feed-list-item';
+    // includeRetweets が undefined の場合は true 扱い（既存フィードの互換）
+    const rtChecked = feed.includeRetweets !== false;
     item.innerHTML = `
-      <span class="feed-list-item-name">${escHtml(feed.name)}</span>
-      <span class="feed-list-item-id">${escHtml(feed.listId)}</span>
-      <span class="feed-list-item-remove" data-index="${i}" aria-label="削除">×</span>`;
+      <div class="feed-list-item-info">
+        <span class="feed-list-item-name">${escHtml(feed.name)}</span>
+        <span class="feed-list-item-id">${escHtml(feed.listId)}</span>
+      </div>
+      <label class="feed-list-item-rt">
+        <input type="checkbox" ${rtChecked ? 'checked' : ''} aria-label="RTを含める">
+        <span>RT</span>
+      </label>
+      <span class="feed-list-item-remove" aria-label="削除">×</span>`;
+
+    // RT トグル: 変更時に即保存し、現在表示中のフィードなら再読込
+    const rtInput = item.querySelector('.feed-list-item-rt input');
+    rtInput.addEventListener('change', async () => {
+      feeds[i].includeRetweets = rtInput.checked;
+      await setSetting('feeds', JSON.stringify(feeds));
+      if (feeds[i].id === currentFeedId && stack) {
+        await loadFeed(currentFeedId);
+      }
+      showToast(rtInput.checked ? `${feed.name}: RT含める` : `${feed.name}: RT除外`);
+    });
+
     item.querySelector('.feed-list-item-remove').addEventListener('click', () => {
       feeds.splice(i, 1);
       renderFeedList();
@@ -921,7 +952,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const listId = prompt('X リスト ID (数字)');
     if (!listId) return;
     const id = name.toLowerCase().replace(/\s+/g, '-');
-    feeds.push({ id, name, listId });
+    feeds.push({ id, name, listId, includeRetweets: true });
     renderFeedList();
   });
 
