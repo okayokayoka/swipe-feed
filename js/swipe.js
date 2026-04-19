@@ -204,13 +204,17 @@ function stripUrls(str) {
 // ──────────────────────────────────────────────────────────────
 // 画像ビューアー（ライトボックス）
 // ──────────────────────────────────────────────────────────────
-function openImageViewer(url) {
-  _dbgLog('openImageViewer CALLED', { url: url.slice(-30) });
+function openImageViewer(urls, index = 0) {
+  // 後方互換: 単一 URL が渡された場合も配列化
+  const urlArray = Array.isArray(urls) ? urls : [urls];
+  const total = urlArray.length;
+  let currentIndex = Math.max(0, Math.min(index, total - 1));
+
+  _dbgLog('openImageViewer CALLED', { count: total, index: currentIndex });
   const overlay = document.createElement('div');
   overlay.className = 'img-viewer';
-  overlay.innerHTML = `<img class="img-viewer-img" src="${escHtml(url)}" alt="拡大表示" draggable="false">`;
+  overlay.innerHTML = `<img class="img-viewer-img" src="${escHtml(urlArray[currentIndex])}" alt="拡大表示" draggable="false">`;
   document.body.appendChild(overlay);
-  _dbgLog('overlay appended', { zIndex: getComputedStyle(overlay).zIndex, display: getComputedStyle(overlay).display });
 
   const img = overlay.querySelector('.img-viewer-img');
   requestAnimationFrame(() => overlay.classList.add('open'));
@@ -229,26 +233,57 @@ function openImageViewer(url) {
   let moved = false;
   let dragDX = 0;
   let dragDY = 0;
+  let isTransitioning = false;
   const openedAt = Date.now();
 
   function apply(animated = false) {
-    img.style.transition = animated ? 'transform 0.22s ease' : 'none';
+    img.style.transition = animated ? 'transform 0.22s ease, opacity 0.25s ease' : 'none';
     img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   }
 
-  // 現在の scale 前提で img に drag 中の transform を適用
+  // drag 中は画像を水平に追従させる（縦はダンプ）。視覚的フィードバックのみ、
+  // 閉じるスワイプは無い。
   function applyDragTransform(dx, dy) {
-    const rot = Math.max(-12, Math.min(12, dx / 25));
     img.style.transition = 'none';
-    img.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
-    const dist = Math.hypot(dx, dy);
-    overlay.style.backgroundColor = `rgba(0,0,0,${Math.max(0.35, 1 - dist / 500)})`;
+    img.style.transform = `translate(${dx}px, ${dy * 0.3}px)`;
   }
 
   function resetDragTransform() {
     img.style.transition = 'transform 0.22s ease-out';
     img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-    overlay.style.backgroundColor = '';
+  }
+
+  // 指定 index の画像へスライド遷移
+  function slideToIndex(newIndex) {
+    if (isTransitioning) return;
+    if (newIndex === currentIndex) {
+      resetDragTransform();
+      return;
+    }
+    isTransitioning = true;
+    const width = overlay.clientWidth || window.innerWidth;
+    const forward = newIndex > currentIndex;
+    const flyOutX = forward ? -width : width;
+
+    img.style.transition = 'transform 0.22s ease-out';
+    img.style.transform = `translate(${flyOutX}px, 0)`;
+
+    setTimeout(() => {
+      currentIndex = newIndex;
+      img.src = urlArray[currentIndex];
+      // 状態リセット
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      const entryX = forward ? width : -width;
+      img.style.transition = 'none';
+      img.style.transform = `translate(${entryX}px, 0)`;
+      // reflow 強制
+      void img.offsetWidth;
+      img.style.transition = 'transform 0.22s ease-out';
+      img.style.transform = 'translate(0, 0) scale(1)';
+      setTimeout(() => { isTransitioning = false; }, 220);
+    }, 220);
   }
 
   function clamp() {
@@ -288,6 +323,7 @@ function openImageViewer(url) {
     // Androidでは pointerup 後に合成マウスイベントが発火してビューアを即閉じてしまう。
     // 開いた直後 350ms 以内のイベントは無視する。
     if (Date.now() - openedAt < 350) return;
+    if (isTransitioning) return;
     overlay.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) {
@@ -325,7 +361,7 @@ function openImageViewer(url) {
         ty = startTY + dy;
         apply();
       } else if (moved) {
-        // スワイプで閉じる方向ドラッグの視覚フィードバック
+        // scale=1 時のドラッグはナビゲーション用フィードバック
         dragDX = dx;
         dragDY = dy;
         applyDragTransform(dx, dy);
@@ -353,18 +389,22 @@ function openImageViewer(url) {
         }, 280);
       }
     } else if (scale <= 1) {
-      const dist = Math.hypot(dragDX, dragDY);
-      if (dist > 80) {
-        // 任意方向にフライオフして閉じる
-        const flyX = (dragDX / dist) * (overlay.clientWidth + 200);
-        const flyY = (dragDY / dist) * (overlay.clientHeight + 200);
-        const rot = Math.max(-25, Math.min(25, dragDX / 10));
-        img.style.transition = 'transform 0.26s ease-out, opacity 0.26s';
-        img.style.transform = `translate(${flyX}px, ${flyY}px) rotate(${rot}deg)`;
-        img.style.opacity = '0';
-        setTimeout(userClose, 240);
+      // ナビゲーション判定：水平方向への十分な移動なら次/前の画像へ
+      const absDX = Math.abs(dragDX);
+      const absDY = Math.abs(dragDY);
+      const SWIPE_THRESHOLD = 60;
+
+      if (absDX > SWIPE_THRESHOLD && absDX > absDY * 1.2) {
+        if (dragDX < 0 && currentIndex < total - 1) {
+          slideToIndex(currentIndex + 1);
+        } else if (dragDX > 0 && currentIndex > 0) {
+          slideToIndex(currentIndex - 1);
+        } else {
+          // 境界（最初/最後）または方向一致せず → 戻す
+          resetDragTransform();
+        }
       } else {
-        // 閾値未満：元の位置へスナップバック
+        // 閾値未満 → 戻す
         resetDragTransform();
       }
       dragDX = 0;
@@ -378,13 +418,25 @@ function openImageViewer(url) {
   overlay.addEventListener('pointercancel', (e) => {
     pts.delete(e.pointerId);
     lastDist = null;
-    // ドラッグ中のキャンセル時も元に戻す
     if (scale <= 1 && (dragDX !== 0 || dragDY !== 0)) {
       resetDragTransform();
       dragDX = 0;
       dragDY = 0;
     }
   });
+}
+
+// img 要素から同じカードに含まれる画像群を取得してビューアを開く
+function openImageViewerFromElement(imgEl) {
+  const container = imgEl.closest('.card-image-scroll, .card-image-single');
+  if (!container) {
+    openImageViewer([imgEl.src], 0);
+    return;
+  }
+  const imgs = [...container.querySelectorAll('img')];
+  const urls = imgs.map(i => i.src);
+  const idx = imgs.indexOf(imgEl);
+  openImageViewer(urls, Math.max(0, idx));
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -581,7 +633,7 @@ export class CardStack {
         if (Math.abs(this._curX || 0) > threshold || Math.abs(this._curY || 0) > threshold) {
           return; // スワイプ意図と判断してビューア開かない
         }
-        openImageViewer(img.src);
+        openImageViewerFromElement(img);
       });
     });
 
@@ -733,7 +785,7 @@ export class CardStack {
         _dbgLog('tap-check', { startTag: t.tagName, inScroll: !!inScroll, inSingle: !!inSingle, threshold: tapThreshold });
         if (Math.abs(dx) < tapThreshold && Math.abs(dy) < tapThreshold) {
           this._returnCard(wrapper);
-          openImageViewer(t.src);
+          openImageViewerFromElement(t);
           return;
         }
       }
@@ -770,7 +822,7 @@ export class CardStack {
       _dbgLog('cancel-tap-check', { startTag: t?.tagName, inSingle: !!(t?.closest('.card-image-single')), inScroll: !!(t?.closest('.card-image-scroll')) });
       if (t?.tagName === 'IMG' && t.closest('.card-image-single')) {
         this._returnCard(e.currentTarget);
-        openImageViewer(t.src);
+        openImageViewerFromElement(t);
         return;
       }
     }
