@@ -227,11 +227,28 @@ function openImageViewer(url) {
   let startTX = 0;
   let startTY = 0;
   let moved = false;
+  let dragDX = 0;
+  let dragDY = 0;
   const openedAt = Date.now();
 
   function apply(animated = false) {
     img.style.transition = animated ? 'transform 0.22s ease' : 'none';
     img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }
+
+  // 現在の scale 前提で img に drag 中の transform を適用
+  function applyDragTransform(dx, dy) {
+    const rot = Math.max(-12, Math.min(12, dx / 25));
+    img.style.transition = 'none';
+    img.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+    const dist = Math.hypot(dx, dy);
+    overlay.style.backgroundColor = `rgba(0,0,0,${Math.max(0.35, 1 - dist / 500)})`;
+  }
+
+  function resetDragTransform() {
+    img.style.transition = 'transform 0.22s ease-out';
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    overlay.style.backgroundColor = '';
   }
 
   function clamp() {
@@ -242,9 +259,24 @@ function openImageViewer(url) {
     ty = Math.max(-maxY, Math.min(maxY, ty));
   }
 
+  // DOMクリーンアップのみ（popstate から呼ばれる）
   function close() {
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 250);
+  }
+
+  // ユーザー操作による閉じる（モーダル履歴経由で popstate → close）
+  function userClose() {
+    if (window.__modalHistory) {
+      window.__modalHistory.dismiss('image-viewer');
+    } else {
+      close();
+    }
+  }
+
+  // 戻るボタンでも閉じられるようモーダル履歴に登録
+  if (window.__modalHistory) {
+    window.__modalHistory.push('image-viewer', close);
   }
 
   overlay.addEventListener('pointerdown', (e) => {
@@ -261,6 +293,8 @@ function openImageViewer(url) {
       startTY = ty;
       moved = false;
       lastDist = null;
+      dragDX = 0;
+      dragDY = 0;
     }
   });
 
@@ -286,6 +320,11 @@ function openImageViewer(url) {
         tx = startTX + dx;
         ty = startTY + dy;
         apply();
+      } else if (moved) {
+        // スワイプで閉じる方向ドラッグの視覚フィードバック
+        dragDX = dx;
+        dragDY = dy;
+        applyDragTransform(dx, dy);
       }
     }
   });
@@ -294,8 +333,6 @@ function openImageViewer(url) {
     pts.delete(e.pointerId);
     if (pts.size > 0) { lastDist = null; return; }
     lastDist = null;
-
-    const dy = e.clientY - startY;
 
     if (!moved) {
       const now = Date.now();
@@ -308,11 +345,26 @@ function openImageViewer(url) {
       } else {
         lastTap = now;
         tapTimer = setTimeout(() => {
-          if (scale <= 1) close();
+          if (scale <= 1) userClose();
         }, 280);
       }
-    } else if (scale <= 1 && dy > 80) {
-      close();
+    } else if (scale <= 1) {
+      const dist = Math.hypot(dragDX, dragDY);
+      if (dist > 80) {
+        // 任意方向にフライオフして閉じる
+        const flyX = (dragDX / dist) * (overlay.clientWidth + 200);
+        const flyY = (dragDY / dist) * (overlay.clientHeight + 200);
+        const rot = Math.max(-25, Math.min(25, dragDX / 10));
+        img.style.transition = 'transform 0.26s ease-out, opacity 0.26s';
+        img.style.transform = `translate(${flyX}px, ${flyY}px) rotate(${rot}deg)`;
+        img.style.opacity = '0';
+        setTimeout(userClose, 240);
+      } else {
+        // 閾値未満：元の位置へスナップバック
+        resetDragTransform();
+      }
+      dragDX = 0;
+      dragDY = 0;
     } else {
       clamp();
       apply(true);
@@ -322,6 +374,12 @@ function openImageViewer(url) {
   overlay.addEventListener('pointercancel', (e) => {
     pts.delete(e.pointerId);
     lastDist = null;
+    // ドラッグ中のキャンセル時も元に戻す
+    if (scale <= 1 && (dragDX !== 0 || dragDY !== 0)) {
+      resetDragTransform();
+      dragDX = 0;
+      dragDY = 0;
+    }
   });
 }
 

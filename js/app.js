@@ -736,6 +736,9 @@ function dismissModal(name) {
   }
 }
 
+// swipe.js など他モジュールからモーダル履歴を使えるように window に公開
+window.__modalHistory = { push: pushModalHistory, dismiss: dismissModal };
+
 // ────────────────────────────────────────────────────────────────
 // バックグラウンドスワイプでフィード切替
 // ────────────────────────────────────────────────────────────────
