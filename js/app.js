@@ -24,15 +24,25 @@ import { CardStack, triggerSwipeAction, buildCardHTML } from './swipe.js';
 // デフォルトフィード設定
 // ────────────────────────────────────────────────────────────────
 const DEFAULT_FEEDS = [
-  { id: 'tech',    name: 'Tech',    listId: '2039195389270913259', includeRetweets: true, mediaOnly: false },
-  { id: 'games',   name: 'Games',   listId: '2039204263470285206', includeRetweets: true, mediaOnly: false },
-  { id: 'toys',    name: 'Toys',    listId: '2039202935536832833', includeRetweets: true, mediaOnly: false },
-  { id: 'gadgets', name: 'Gadgets', listId: '2039204038647103800', includeRetweets: true, mediaOnly: false },
-  { id: 'books',   name: 'Books',   listId: '2039206851309609264', includeRetweets: true, mediaOnly: false },
-  { id: 'foods',   name: 'Foods',   listId: '2039221154691653645', includeRetweets: true, mediaOnly: false },
-  { id: 'friends', name: 'Friends', listId: '2039207895963992261', includeRetweets: true, mediaOnly: false },
-  { id: 'etc',     name: 'Etc',     listId: '1783369589369499680', includeRetweets: true, mediaOnly: false },
+  { id: 'tech',    name: 'Tech',    listIds: ['2039195389270913259'], includeRetweets: true, mediaOnly: false },
+  { id: 'games',   name: 'Games',   listIds: ['2039204263470285206'], includeRetweets: true, mediaOnly: false },
+  { id: 'toys',    name: 'Toys',    listIds: ['2039202935536832833'], includeRetweets: true, mediaOnly: false },
+  { id: 'gadgets', name: 'Gadgets', listIds: ['2039204038647103800'], includeRetweets: true, mediaOnly: false },
+  { id: 'books',   name: 'Books',   listIds: ['2039206851309609264'], includeRetweets: true, mediaOnly: false },
+  { id: 'foods',   name: 'Foods',   listIds: ['2039221154691653645'], includeRetweets: true, mediaOnly: false },
+  { id: 'friends', name: 'Friends', listIds: ['2039207895963992261'], includeRetweets: true, mediaOnly: false },
+  { id: 'etc',     name: 'Etc',     listIds: ['1783369589369499680'], includeRetweets: true, mediaOnly: false },
 ];
+
+// 旧形式 { listId: '...' } を新形式 { listIds: [...] } に変換
+function migrateFeed(f) {
+  if (Array.isArray(f.listIds)) return f;
+  if (f.listId) {
+    const { listId, ...rest } = f;
+    return { ...rest, listIds: [listId] };
+  }
+  return { ...f, listIds: [] };
+}
 
 // ────────────────────────────────────────────────────────────────
 // 状態
@@ -77,9 +87,14 @@ async function init() {
   await openDB();
   settings = await loadSettings();
 
-  // 設定からフィード一覧を復元
+  // 設定からフィード一覧を復元（必要なら旧 listId → listIds にマイグレート）
   if (settings.feeds) {
-    try { feeds = JSON.parse(settings.feeds); } catch { /* デフォルト使用 */ }
+    try {
+      const parsed = JSON.parse(settings.feeds);
+      if (Array.isArray(parsed)) {
+        feeds = parsed.map(migrateFeed);
+      }
+    } catch { /* デフォルト使用 */ }
   }
 
   // ブロック著者リストを復元
@@ -234,19 +249,39 @@ async function loadFeed(feedId) {
 
 async function fetchAndCache(feedId) {
   const feed = feeds.find(f => f.id === feedId);
-  if (!feed) return null;
+  if (!feed || !feed.listIds?.length) return null;
 
-  const { tweets } = await fetchListTimeline({
-    listId: feed.listId,
-    authToken: settings.authToken,
-    ct0: settings.ct0,
-    workerUrl: settings.workerUrl,
-    proxySecret: settings.proxySecret,
-    count: 40,
-  });
+  // 複数リストを並列取得し、失敗したものはスキップ
+  const results = await Promise.allSettled(
+    feed.listIds.map(listId =>
+      fetchListTimeline({
+        listId,
+        authToken: settings.authToken,
+        ct0: settings.ct0,
+        workerUrl: settings.workerUrl,
+        proxySecret: settings.proxySecret,
+        count: 40,
+      })
+    )
+  );
 
-  if (tweets.length > 0) {
-    await savePosts(tweets, feedId);
+  // ツイート ID で dedupe しながらマージ
+  const seen = new Set();
+  const allTweets = [];
+  for (const r of results) {
+    if (r.status !== 'fulfilled') {
+      console.warn('リスト取得失敗:', r.reason);
+      continue;
+    }
+    for (const t of r.value.tweets) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      allTweets.push(t);
+    }
+  }
+
+  if (allTweets.length > 0) {
+    await savePosts(allTweets, feedId);
   }
 
   return getUnreadPosts(feedId, 30);
@@ -703,54 +738,149 @@ function renderFeedList() {
   list.innerHTML = '';
   feeds.forEach((feed, i) => {
     const item = document.createElement('div');
-    item.className = 'feed-list-item';
-    // includeRetweets が undefined の場合は true 扱い（既存フィードの互換）
-    const rtChecked = feed.includeRetweets !== false;
-    const mediaOnlyChecked = feed.mediaOnly === true;
+    item.className = 'feed-list-item feed-list-item-tappable';
+    const listCount = feed.listIds?.length ?? 0;
+    const firstListId = feed.listIds?.[0] ?? '';
+    const summary = listCount > 1 ? `${listCount} リスト` : firstListId;
     item.innerHTML = `
       <div class="feed-list-item-info">
         <span class="feed-list-item-name">${escHtml(feed.name)}</span>
-        <span class="feed-list-item-id">${escHtml(feed.listId)}</span>
+        <span class="feed-list-item-id">${escHtml(summary)}</span>
       </div>
-      <div class="feed-list-item-toggles">
-        <label class="feed-list-item-toggle">
-          <input type="checkbox" data-kind="rt" ${rtChecked ? 'checked' : ''} aria-label="RTを含める">
-          <span>RT</span>
-        </label>
-        <label class="feed-list-item-toggle">
-          <input type="checkbox" data-kind="media-only" ${mediaOnlyChecked ? 'checked' : ''} aria-label="メディアのみ">
-          <span>画像のみ</span>
-        </label>
-      </div>
+      <span class="feed-list-item-chevron" aria-hidden="true">›</span>
       <span class="feed-list-item-remove" aria-label="削除">×</span>`;
 
-    // 共通ハンドラ：トグル変更時に即保存＋カレントフィード再読込
-    const onToggle = async (msg) => {
-      await setSetting('feeds', JSON.stringify(feeds));
-      if (feeds[i].id === currentFeedId && stack) {
-        await loadFeed(currentFeedId);
-      }
-      showToast(msg);
-    };
-
-    const rtInput = item.querySelector('input[data-kind="rt"]');
-    rtInput.addEventListener('change', async () => {
-      feeds[i].includeRetweets = rtInput.checked;
-      await onToggle(rtInput.checked ? `${feed.name}: RT含める` : `${feed.name}: RT除外`);
+    // 行タップ → 編集画面へ
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('feed-list-item-remove')) return;
+      showFeedEditScreen(i);
     });
 
-    const mediaInput = item.querySelector('input[data-kind="media-only"]');
-    mediaInput.addEventListener('change', async () => {
-      feeds[i].mediaOnly = mediaInput.checked;
-      await onToggle(mediaInput.checked ? `${feed.name}: 画像/動画のみ` : `${feed.name}: 全投稿表示`);
-    });
-
-    item.querySelector('.feed-list-item-remove').addEventListener('click', () => {
+    item.querySelector('.feed-list-item-remove').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`フィード「${feed.name}」を削除しますか？`)) return;
       feeds.splice(i, 1);
+      await setSetting('feeds', JSON.stringify(feeds));
       renderFeedList();
     });
     list.appendChild(item);
   });
+}
+
+// ────────────────────────────────────────────────────────────────
+// フィード編集画面
+// ────────────────────────────────────────────────────────────────
+let currentFeedEditIndex = -1;
+
+function showFeedEditScreen(index) {
+  currentFeedEditIndex = index;
+  showScreen('feed-edit');
+}
+
+function renderFeedEdit() {
+  const i = currentFeedEditIndex;
+  const feed = feeds[i];
+  if (!feed) {
+    // フィードが見当たらない（削除等）→ 設定へ戻る
+    history.back();
+    return;
+  }
+
+  document.getElementById('feed-edit-title').textContent = `${feed.name} を編集`;
+
+  const nameInput = document.getElementById('feed-edit-name');
+  nameInput.value = feed.name ?? '';
+  nameInput.onchange = async () => {
+    const newName = nameInput.value.trim();
+    if (!newName) { nameInput.value = feed.name; return; }
+    feeds[i].name = newName;
+    await setSetting('feeds', JSON.stringify(feeds));
+    document.getElementById('feed-edit-title').textContent = `${newName} を編集`;
+    // タブ表示も更新する必要があるので、カレントフィード隣接なら再描画
+    buildFeedTabs();
+  };
+
+  const rtInput = document.getElementById('feed-edit-rt');
+  rtInput.checked = feed.includeRetweets !== false;
+  rtInput.onchange = async () => {
+    feeds[i].includeRetweets = rtInput.checked;
+    await onFeedEditChanged(i, rtInput.checked ? 'RT含める' : 'RT除外');
+  };
+
+  const mediaInput = document.getElementById('feed-edit-media');
+  mediaInput.checked = feed.mediaOnly === true;
+  mediaInput.onchange = async () => {
+    feeds[i].mediaOnly = mediaInput.checked;
+    await onFeedEditChanged(i, mediaInput.checked ? '画像/動画のみ' : '全投稿表示');
+  };
+
+  renderFeedEditLists();
+}
+
+async function onFeedEditChanged(i, toastMsg) {
+  await setSetting('feeds', JSON.stringify(feeds));
+  if (feeds[i].id === currentFeedId && stack) {
+    await loadFeed(currentFeedId);
+  }
+  if (toastMsg) showToast(`${feeds[i].name}: ${toastMsg}`);
+}
+
+function renderFeedEditLists() {
+  const i = currentFeedEditIndex;
+  const feed = feeds[i];
+  if (!feed) return;
+
+  const container = document.getElementById('feed-edit-lists');
+  container.innerHTML = '';
+
+  if (!feed.listIds || feed.listIds.length === 0) {
+    container.innerHTML = `<div class="feed-edit-lists-empty">リスト ID が未設定です。「+ リストを追加」で追加してください。</div>`;
+    return;
+  }
+
+  feed.listIds.forEach((listId, j) => {
+    const row = document.createElement('div');
+    row.className = 'feed-edit-list-row';
+    row.innerHTML = `
+      <input class="feed-edit-list-input" type="text" inputmode="numeric" value="${escHtml(listId)}" placeholder="リスト ID（数字）">
+      <button class="feed-edit-list-remove" aria-label="削除">×</button>`;
+
+    const input = row.querySelector('.feed-edit-list-input');
+    input.addEventListener('change', async () => {
+      const v = input.value.trim();
+      if (!v) {
+        // 空にしたら削除
+        feeds[i].listIds.splice(j, 1);
+        await onFeedEditChanged(i, 'リストを削除');
+        renderFeedEditLists();
+        return;
+      }
+      feeds[i].listIds[j] = v;
+      await onFeedEditChanged(i, 'リスト ID を更新');
+    });
+
+    row.querySelector('.feed-edit-list-remove').addEventListener('click', async () => {
+      feeds[i].listIds.splice(j, 1);
+      await onFeedEditChanged(i, 'リストを削除');
+      renderFeedEditLists();
+    });
+
+    container.appendChild(row);
+  });
+}
+
+async function addListToCurrentFeedEdit() {
+  const i = currentFeedEditIndex;
+  const feed = feeds[i];
+  if (!feed) return;
+  const newListId = prompt('追加する X リスト ID（数字）');
+  if (!newListId) return;
+  const trimmed = newListId.trim();
+  if (!trimmed) return;
+  if (!feeds[i].listIds) feeds[i].listIds = [];
+  feeds[i].listIds.push(trimmed);
+  await onFeedEditChanged(i, 'リストを追加');
+  renderFeedEditLists();
 }
 
 async function saveSettings() {
@@ -826,6 +956,9 @@ function showScreenInternal(name) {
   if (name === 'history') {
     const query = document.getElementById('history-search')?.value ?? '';
     renderHistory(query);
+  }
+  if (name === 'feed-edit') {
+    renderFeedEdit();
   }
 
   scheduleBottomNavOffsetSync();
@@ -1031,15 +1164,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // フィード追加
-  document.getElementById('btn-add-feed')?.addEventListener('click', () => {
-    const name   = prompt('フィード名 (例: tech)');
+  document.getElementById('btn-add-feed')?.addEventListener('click', async () => {
+    const name = prompt('フィード名 (例: tech)');
     if (!name) return;
-    const listId = prompt('X リスト ID (数字)');
-    if (!listId) return;
-    const id = name.toLowerCase().replace(/\s+/g, '-');
-    feeds.push({ id, name, listId, includeRetweets: true, mediaOnly: false });
+    const firstListId = prompt('最初の X リスト ID（数字、あとで追加可）');
+    if (!firstListId) return;
+    const id = name.trim().toLowerCase().replace(/\s+/g, '-');
+    feeds.push({
+      id,
+      name: name.trim(),
+      listIds: [firstListId.trim()],
+      includeRetweets: true,
+      mediaOnly: false,
+    });
+    await setSetting('feeds', JSON.stringify(feeds));
     renderFeedList();
+    showFeedEditScreen(feeds.length - 1);
   });
+
+  // フィード編集画面
+  document.getElementById('btn-feed-edit-back')?.addEventListener('click', () => history.back());
+  document.getElementById('btn-feed-edit-add-list')?.addEventListener('click', addListToCurrentFeedEdit);
 
   // セットアップ画面の保存
   document.getElementById('btn-setup-save')?.addEventListener('click', async () => {

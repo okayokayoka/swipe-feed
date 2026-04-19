@@ -173,6 +173,43 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════
+         フィード編集画面
+    ═══════════════════════════════════════════════════ -->
+    <div id="screen-feed-edit" class="screen settings-screen">
+      <div class="bookmarks-header history-header">
+        <button id="btn-feed-edit-back" class="history-back-btn" aria-label="設定に戻る">← 戻る</button>
+        <h1 class="bookmarks-title" id="feed-edit-title">フィード編集</h1>
+      </div>
+
+      <!-- フィード名 -->
+      <div class="settings-section">
+        <p class="settings-section-title">フィード名</p>
+        <input id="feed-edit-name" class="settings-input" type="text" spellcheck="false">
+      </div>
+
+      <!-- 表示設定 -->
+      <div class="settings-section">
+        <p class="settings-section-title">表示設定</p>
+        <label class="settings-toggle-row">
+          <input id="feed-edit-rt" type="checkbox">
+          <span>RT を含める</span>
+        </label>
+        <label class="settings-toggle-row">
+          <input id="feed-edit-media" type="checkbox">
+          <span>画像/動画付きツイートのみ</span>
+        </label>
+      </div>
+
+      <!-- リスト ID -->
+      <div class="settings-section">
+        <p class="settings-section-title">リスト ID</p>
+        <div id="feed-edit-lists" class="feed-edit-lists"></div>
+        <button id="btn-feed-edit-add-list" class="settings-btn">+ リストを追加</button>
+        <p class="settings-hint">複数のリストを追加すると、このフィードにまとめて表示されます</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
          履歴画面（いいね / スキップ）
     ═══════════════════════════════════════════════════ -->
     <div id="screen-history" class="screen">
