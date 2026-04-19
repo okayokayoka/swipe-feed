@@ -1022,6 +1022,11 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.img-viewer.open .img-viewer-img {
+  opacity: 1;
 }
 
 /* ────────────────────────────────────────────────────────────────

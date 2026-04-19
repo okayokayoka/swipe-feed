@@ -261,6 +261,10 @@ function openImageViewer(url) {
 
   // DOMクリーンアップのみ（popstate から呼ばれる）
   function close() {
+    // inline transition が transform のみに上書きされていた場合に
+    // opacity transition が効かなくなるため、ここで明示的に両方を指定する。
+    // これにより background フェードと同期して画像もフェードアウトする。
+    img.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 250);
   }
